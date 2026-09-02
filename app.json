@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Waselni",
+    "slug": "waselni",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "waselni",
+    "plugins": ["expo-router", "expo-location", "expo-notifications"],
+    "android": {
+      "package": "com.waselni.app",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"]
+    },
+    "ios": {
+      "bundleIdentifier": "com.waselni.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "نستخدم موقعك لتحديد عنوان التوصيل وتتبع الطلب.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نستخدم موقع المندوب في الخلفية أثناء التوصيل لتحديث موقعه."
+      }
+    }
+  }
+}
