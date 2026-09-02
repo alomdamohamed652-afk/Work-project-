@@ -1,25 +1,80 @@
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "@/constants/theme";
+
+const categories = [
+  ["🍔", "برجر"], ["🍕", "بيتزا"], ["🥩", "مشويات"], ["🍰", "حلويات"], ["🥤", "مشروبات"]
+];
 
 export default function HomeScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.greeting}>أهلاً بيك 👋</Text>
-      <Text style={styles.search}>🔎 ابحث عن مطعم أو أكلة</Text>
-      <Text style={styles.section}>🔥 عروض اليوم</Text>
-      <View style={styles.card}><Text style={styles.cardTitle}>خصومات قريبة منك</Text><Text style={styles.cardText}>العروض والتصنيفات ستُدار من لوحة الإدارة.</Text></View>
-      <Text style={styles.section}>🍔 التصنيفات</Text>
-      <Text style={styles.categories}>برجر   بيتزا   مشويات   حلويات   مشروبات</Text>
-    </View>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <View><Text style={styles.greeting}>أهلاً بيك 👋</Text><Text style={styles.location}>اختر منطقتك للبدء</Text></View>
+          <View style={styles.avatar}><Text style={styles.avatarText}>و</Text></View>
+        </View>
+
+        <View style={styles.search}><Text style={styles.searchIcon}>⌕</Text><Text style={styles.searchText}>ابحث عن مطعم أو أكلة</Text></View>
+
+        <SectionTitle title="عروض اليوم" />
+        <View style={styles.offer}>
+          <View style={styles.offerText}>
+            <Text style={styles.offerKicker}>خصم مميز</Text>
+            <Text style={styles.offerTitle}>خصومات قريبة منك</Text>
+            <Text style={styles.offerDesc}>العروض الجديدة هتظهر هنا أول ما تتوفر.</Text>
+          </View>
+          <Text style={styles.offerEmoji}>🔥</Text>
+        </View>
+
+        <SectionTitle title="التصنيفات" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
+          {categories.map(([icon, name]) => (
+            <View key={name} style={styles.category}><Text style={styles.categoryIcon}>{icon}</Text><Text style={styles.categoryName}>{name}</Text></View>
+          ))}
+        </ScrollView>
+
+        <SectionTitle title="قريبًا منك" />
+        <View style={styles.empty}>
+          <Text style={styles.emptyIcon}>🏪</Text>
+          <Text style={styles.emptyTitle}>لسه بنجهز الأماكن القريبة</Text>
+          <Text style={styles.emptyText}>بمجرد إضافة المطاعم من لوحة الإدارة هتظهر هنا تلقائيًا.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
+function SectionTitle({ title }: { title: string }) {
+  return <View style={styles.sectionRow}><Text style={styles.section}>{title}</Text><Text style={styles.more}>عرض الكل</Text></View>;
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, paddingTop: 70, backgroundColor: "#fff" },
-  greeting: { fontSize: 26, fontWeight: "800", textAlign: "right", marginBottom: 22 },
-  search: { backgroundColor: "#f3f3f3", padding: 18, borderRadius: 14, textAlign: "right", color: "#666", marginBottom: 28 },
-  section: { fontSize: 20, fontWeight: "800", textAlign: "right", marginBottom: 14 },
-  card: { borderWidth: 1, borderColor: "#eee", borderRadius: 18, padding: 20, marginBottom: 28 },
-  cardTitle: { fontSize: 18, fontWeight: "700", textAlign: "right", marginBottom: 8 },
-  cardText: { color: "#666", textAlign: "right", lineHeight: 23 },
-  categories: { fontSize: 16, lineHeight: 34, textAlign: "right" }
+  safe: { flex: 1, backgroundColor: theme.background },
+  container: { padding: 20, paddingBottom: 35 },
+  header: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  greeting: { color: theme.text, fontSize: 25, fontWeight: "900", textAlign: "right" },
+  location: { color: theme.muted, fontSize: 12, textAlign: "right", marginTop: 5 },
+  avatar: { width: 46, height: 46, borderRadius: 15, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontSize: 23, fontWeight: "900" },
+  search: { height: 56, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 17, flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, marginBottom: 27 },
+  searchIcon: { fontSize: 25, color: theme.muted, marginLeft: 10 },
+  searchText: { flex: 1, color: "#969696", fontSize: 14, textAlign: "right" },
+  sectionRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12, marginTop: 3 },
+  section: { color: theme.text, fontSize: 19, fontWeight: "900", textAlign: "right" },
+  more: { color: theme.muted, fontSize: 12 },
+  offer: { minHeight: 145, borderRadius: 21, backgroundColor: theme.primary, padding: 20, flexDirection: "row-reverse", alignItems: "center", marginBottom: 27 },
+  offerText: { flex: 1, alignItems: "flex-end" },
+  offerKicker: { color: "#D0D0D0", fontSize: 12, fontWeight: "700" },
+  offerTitle: { color: "#fff", fontSize: 21, fontWeight: "900", marginTop: 5, textAlign: "right" },
+  offerDesc: { color: "#C4C4C4", fontSize: 12, lineHeight: 19, marginTop: 7, textAlign: "right" },
+  offerEmoji: { fontSize: 43, marginLeft: 12 },
+  categories: { gap: 10, paddingBottom: 8, flexDirection: "row-reverse" },
+  category: { width: 76, height: 82, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  categoryIcon: { fontSize: 25, marginBottom: 5 },
+  categoryName: { color: theme.text, fontSize: 12, fontWeight: "700" },
+  empty: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 20, padding: 26, alignItems: "center", marginTop: 2 },
+  emptyIcon: { fontSize: 34, marginBottom: 9 },
+  emptyTitle: { color: theme.text, fontSize: 16, fontWeight: "800", textAlign: "center" },
+  emptyText: { color: theme.muted, fontSize: 12, lineHeight: 19, textAlign: "center", marginTop: 7 }
 });
