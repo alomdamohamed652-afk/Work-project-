@@ -1,0 +1,122 @@
+const express = require("express");
+const router = express.Router();
+const { pool } = require("../db");
+const { requireAuth, requireRole } = require("../auth");
+
+const activeDeliveryStatuses = ["assigned", "picked_up", "on_the_way"];
+
+function validCoordinate(value, min, max) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max;
+}
+
+router.post("/", requireAuth, requireRole("customer"), async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    if (!validCoordinate(b.deliveryLatitude, -90, 90) || !validCoordinate(b.deliveryLongitude, -180, 180)) {
+      return res.status(400).json({ error: "حدد موقع التوصيل على الخريطة" });
+    }
+    const total = Number(b.totalAmount || 0);
+    if (!Number.isFinite(total) || total < 0) return res.status(400).json({ error: "إجمالي الطلب غير صحيح" });
+
+    const { rows } = await pool.query(
+      `INSERT INTO orders
+        (customer_id, restaurant_id, status, delivery_latitude, delivery_longitude, delivery_address, total_amount)
+       VALUES ($1,$2,'pending',$3,$4,$5,$6)
+       RETURNING *`,
+      [
+        req.user.id,
+        b.restaurantId || null,
+        Number(b.deliveryLatitude),
+        Number(b.deliveryLongitude),
+        b.deliveryAddress ? String(b.deliveryAddress).trim() : null,
+        total
+      ]
+    );
+    res.status(201).json({ order: rows[0] });
+  } catch (error) { next(error); }
+});
+
+router.get("/mine", requireAuth, requireRole("customer"), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, u.full_name AS driver_name, u.phone AS driver_phone,
+              l.latitude AS driver_latitude, l.longitude AS driver_longitude,
+              l.accuracy AS driver_accuracy, l.heading AS driver_heading,
+              l.speed AS driver_speed, l.updated_at AS driver_location_updated_at
+       FROM orders o
+       LEFT JOIN users u ON u.id=o.driver_id
+       LEFT JOIN user_locations l ON l.user_id=o.driver_id
+       WHERE o.customer_id=$1
+       ORDER BY o.created_at DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ orders: rows });
+  } catch (error) { next(error); }
+});
+
+router.get("/driver/mine", requireAuth, requireRole("driver"), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.id, o.status, o.delivery_latitude, o.delivery_longitude,
+              o.delivery_address, o.total_amount, o.created_at, o.updated_at,
+              c.full_name AS customer_name, c.phone AS customer_phone,
+              c.secondary_phone AS customer_secondary_phone
+       FROM orders o JOIN users c ON c.id=o.customer_id
+       WHERE o.driver_id=$1 AND o.status IN ('assigned','picked_up','on_the_way')
+       ORDER BY o.updated_at DESC`,
+      [req.user.id]
+    );
+    res.json({ orders: rows });
+  } catch (error) { next(error); }
+});
+
+router.get("/admin", requireAuth, requireRole("admin", "staff"), async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, c.full_name AS customer_name, c.phone AS customer_phone,
+              d.full_name AS driver_name, d.phone AS driver_phone
+       FROM orders o
+       JOIN users c ON c.id=o.customer_id
+       LEFT JOIN users d ON d.id=o.driver_id
+       ORDER BY o.updated_at DESC LIMIT 200`
+    );
+    res.json({ orders: rows });
+  } catch (error) { next(error); }
+});
+
+router.patch("/:id/assign", requireAuth, requireRole("admin", "staff"), async (req, res, next) => {
+  try {
+    const driverId = String(req.body?.driverId || "");
+    const driver = await pool.query("SELECT id FROM users WHERE id=$1 AND role='driver' AND status='active'", [driverId]);
+    if (!driver.rows[0]) return res.status(400).json({ error: "المندوب غير موجود أو غير نشط" });
+
+    const { rows } = await pool.query(
+      `UPDATE orders SET driver_id=$1, status='assigned', updated_at=now()
+       WHERE id=$2 AND status NOT IN ('delivered','cancelled')
+       RETURNING *`,
+      [driverId, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "الطلب غير موجود أو مغلق" });
+    res.json({ order: rows[0] });
+  } catch (error) { next(error); }
+});
+
+router.patch("/:id/status", requireAuth, requireRole("driver"), async (req, res, next) => {
+  try {
+    const status = String(req.body?.status || "");
+    if (!activeDeliveryStatuses.includes(status) && status !== "delivered") {
+      return res.status(400).json({ error: "حالة الطلب غير صحيحة" });
+    }
+    const { rows } = await pool.query(
+      `UPDATE orders SET status=$1, updated_at=now()
+       WHERE id=$2 AND driver_id=$3 AND status NOT IN ('delivered','cancelled')
+       RETURNING *`,
+      [status, req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "الطلب غير موجود أو غير مسند إليك" });
+    res.json({ order: rows[0] });
+  } catch (error) { next(error); }
+});
+
+module.exports = router;
