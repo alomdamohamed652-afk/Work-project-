@@ -19,6 +19,19 @@ async function main() {
 
     CREATE INDEX IF NOT EXISTS users_role_idx ON users(role);
     CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      description TEXT,
+      image_url TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS categories_active_order_idx ON categories(is_active, sort_order, created_at);
   `);
 
   const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\\s-]/g, '');
