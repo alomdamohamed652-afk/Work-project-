@@ -63,7 +63,7 @@ router.get("/my-driver", requireAuth, requireRole("customer"), async (req, res, 
   } catch (error) { next(error); }
 });
 
-router.get("/drivers/:id", requireAuth, async (req, res, next) => {
+router.get("/drivers/:id", requireAuth, requireRole("admin", "staff"), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.full_name, u.phone, u.status, l.latitude, l.longitude, l.accuracy, l.heading, l.speed, l.updated_at
