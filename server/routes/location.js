@@ -32,7 +32,7 @@ router.post("/me", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/drivers", requireAuth, requireRole("admin", "staff", "restaurant", "customer"), async (_req, res, next) => {
+router.get("/drivers", requireAuth, requireRole("admin", "staff"), async (_req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.full_name, u.phone, u.status, l.latitude, l.longitude, l.accuracy, l.heading, l.speed, l.updated_at
@@ -41,6 +41,25 @@ router.get("/drivers", requireAuth, requireRole("admin", "staff", "restaurant", 
        ORDER BY l.updated_at DESC NULLS LAST`
     );
     res.json({ drivers: rows });
+  } catch (error) { next(error); }
+});
+
+router.get("/my-driver", requireAuth, requireRole("customer"), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.id AS order_id, o.status, u.id AS driver_id, u.full_name, u.phone,
+              l.latitude, l.longitude, l.accuracy, l.heading, l.speed, l.updated_at
+       FROM orders o
+       JOIN users u ON u.id = o.driver_id AND u.role = 'driver'
+       LEFT JOIN user_locations l ON l.user_id = u.id
+       WHERE o.customer_id = $1
+         AND o.driver_id IS NOT NULL
+         AND o.status IN ('assigned','picked_up','on_the_way')
+       ORDER BY o.updated_at DESC
+       LIMIT 1`,
+      [req.user.id]
+    );
+    res.json({ driver: rows[0] || null });
   } catch (error) { next(error); }
 });
 
