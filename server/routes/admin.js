@@ -5,6 +5,19 @@ const { requireAuth, requireRole } = require("../auth");
 
 router.use(requireAuth, requireRole("admin"));
 
+router.get("/stats", async (_req, res) => {
+  const [{ rows: users }, { rows: drivers }, { rows: restaurants }] = await Promise.all([
+    pool.query("SELECT COUNT(*)::int AS count FROM users"),
+    pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'driver' AND status = 'active'"),
+    pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'restaurant' AND status = 'active'")
+  ]);
+  res.json({
+    users: users[0].count,
+    activeDrivers: drivers[0].count,
+    activeRestaurants: restaurants[0].count
+  });
+});
+
 router.get("/users", async (req, res) => {
   const { rows } = await pool.query(
     "SELECT id, full_name, phone, email, role, status, created_at, updated_at FROM users ORDER BY created_at DESC"
@@ -21,7 +34,6 @@ router.patch("/users/:id", async (req, res) => {
   if (status !== undefined && !allowedStatus.includes(status)) return res.status(400).json({ error: "Invalid status" });
   if (role === undefined && status === undefined) return res.status(400).json({ error: "Nothing to update" });
 
-  // The bootstrap admin cannot be demoted or suspended through the normal UI.
   const { rows: targetRows } = await pool.query("SELECT id, role FROM users WHERE id = $1", [req.params.id]);
   const target = targetRows[0];
   if (!target) return res.status(404).json({ error: "User not found" });
@@ -30,10 +42,8 @@ router.patch("/users/:id", async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `UPDATE users
-     SET role = COALESCE($1, role), status = COALESCE($2, status), updated_at = now()
-     WHERE id = $3
-     RETURNING id, full_name, phone, email, role, status, created_at, updated_at`,
+    `UPDATE users SET role = COALESCE($1, role), status = COALESCE($2, status), updated_at = now()
+     WHERE id = $3 RETURNING id, full_name, phone, email, role, status, created_at, updated_at`,
     [role ?? null, status ?? null, req.params.id]
   );
   res.json({ user: rows[0] });
