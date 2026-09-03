@@ -55,6 +55,37 @@ router.get("/mine", requireAuth, requireRole("customer"), async (req, res, next)
   } catch (error) { next(error); }
 });
 
+
+// Orders that are ready for any online/in-service driver to claim.
+router.get("/driver/available", requireAuth, requireRole("driver"), async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.id, o.status, o.restaurant_id, o.delivery_latitude, o.delivery_longitude,
+              o.delivery_address, o.total_amount, o.created_at, o.updated_at,
+              c.full_name AS customer_name, c.phone AS customer_phone
+       FROM orders o JOIN users c ON c.id=o.customer_id
+       WHERE o.driver_id IS NULL AND o.status IN ('confirmed','preparing','ready')
+       ORDER BY o.created_at ASC LIMIT 100`
+    );
+    res.json({ orders: rows });
+  } catch (error) { next(error); }
+});
+
+// Atomic claim: only one driver can win when several swipe at the same time.
+router.patch("/:id/claim", requireAuth, requireRole("driver"), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE orders
+       SET driver_id=$1, status='assigned', updated_at=now()
+       WHERE id=$2 AND driver_id IS NULL AND status IN ('confirmed','preparing','ready')
+       RETURNING *`,
+      [req.user.id, req.params.id]
+    );
+    if (!rows[0]) return res.status(409).json({ error: "الطلب تم استلامه بالفعل أو لم يعد متاحًا" });
+    res.json({ order: rows[0] });
+  } catch (error) { next(error); }
+});
+
 router.get("/driver/mine", requireAuth, requireRole("driver"), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
