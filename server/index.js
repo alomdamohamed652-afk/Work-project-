@@ -3,6 +3,7 @@ const { pool } = require("./db");
 const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
 const healthRoutes = require("./routes/health");
+const categoryRoutes = require("./routes/categories");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -16,6 +17,7 @@ app.get("/", (_req, res) => {
 app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/categories", categoryRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
