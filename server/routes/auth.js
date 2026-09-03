@@ -59,4 +59,24 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", requireAuth, (req, res) => res.json({ user: req.user }));
 
+// Development/initial-admin helper: promotes the configured phone after the
+// account has been registered. The phone is read from the server environment.
+router.post("/bootstrap-admin", async (req, res) => {
+  try {
+    const configuredPhone = process.env.PRIMARY_ADMIN_PHONE;
+    if (!configuredPhone) return res.status(503).json({ error: "PRIMARY_ADMIN_PHONE is not configured" });
+    const phone = String(req.body.phone || "").trim();
+    if (phone !== configuredPhone) return res.status(403).json({ error: "Phone does not match the configured primary admin" });
+    const { rows } = await pool.query(
+      "UPDATE users SET role = 'admin', status = 'active', updated_at = now() WHERE phone = $1 RETURNING id, full_name, phone, email, role, status",
+      [configuredPhone]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Register the admin account with this phone first" });
+    res.json({ user: rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Unable to bootstrap admin" });
+  }
+});
+
 module.exports = router;
