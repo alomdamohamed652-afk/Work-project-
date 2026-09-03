@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 const { pool } = require("../db");
 const { bcrypt, signToken, requireAuth } = require("../auth");
@@ -7,14 +8,23 @@ function normalizePhone(value) {
   return String(value || "").replace(/[\s-]/g, "");
 }
 
+function isValidEgyptianPhone(phone) {
+  return /^01\d{9}$/.test(phone);
+}
+
+function getPrimaryAdminPhone() {
+  const configured = normalizePhone(process.env.PRIMARY_ADMIN_PHONE);
+  return isValidEgyptianPhone(configured) ? configured : null;
+}
+
 router.post("/continue", async (req, res) => {
   try {
     const phone = normalizePhone(req.body?.phone);
-    if (!/^01\d{9}$/.test(phone)) {
+    if (!isValidEgyptianPhone(phone)) {
       return res.status(400).json({ error: "رقم الهاتف غير صحيح" });
     }
 
-    const primaryAdminPhone = normalizePhone(process.env.PRIMARY_ADMIN_PHONE);
+    const primaryAdminPhone = getPrimaryAdminPhone();
     const isPrimaryAdmin = Boolean(primaryAdminPhone && phone === primaryAdminPhone);
 
     let { rows } = await pool.query(
@@ -25,8 +35,7 @@ router.post("/continue", async (req, res) => {
     let user = rows[0];
 
     if (!user) {
-      // Password auth is intentionally not exposed in the current phone-only flow.
-      const passwordHash = await bcrypt.hash(require("crypto").randomUUID(), 10);
+      const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10);
       ({ rows } = await pool.query(
         `INSERT INTO users (full_name, phone, password_hash, role)
          VALUES ($1, $2, $3, $4)
@@ -36,7 +45,8 @@ router.post("/continue", async (req, res) => {
       user = rows[0];
     } else if (isPrimaryAdmin && user.role !== "admin") {
       ({ rows } = await pool.query(
-        `UPDATE users SET role = 'admin', status = 'active', updated_at = now()
+        `UPDATE users
+         SET role = 'admin', status = 'active', updated_at = now()
          WHERE id = $1
          RETURNING id, full_name, phone, email, password_hash, role, status, created_at, updated_at`,
         [user.id]
@@ -56,6 +66,7 @@ router.post("/continue", async (req, res) => {
   }
 });
 
+// Legacy password registration kept for staff/internal setup.
 router.post("/register", async (req, res) => {
   try {
     const { fullName, phone, email, password } = req.body;
@@ -69,11 +80,8 @@ router.post("/register", async (req, res) => {
     const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
     const normalizedPhone = phone ? normalizePhone(phone) : null;
     const passwordHash = await bcrypt.hash(String(password), 12);
-
-    const primaryAdminPhone = normalizePhone(process.env.PRIMARY_ADMIN_PHONE);
-    const role = normalizedPhone && primaryAdminPhone && normalizedPhone === primaryAdminPhone
-      ? "admin"
-      : "customer";
+    const primaryAdminPhone = getPrimaryAdminPhone();
+    const role = normalizedPhone && primaryAdminPhone && normalizedPhone === primaryAdminPhone ? "admin" : "customer";
 
     const { rows } = await pool.query(
       `INSERT INTO users (full_name, phone, email, password_hash, role)
