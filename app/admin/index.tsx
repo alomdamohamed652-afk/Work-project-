@@ -79,7 +79,8 @@ export default function AdminHome() {
           const enabled = title === "المستخدمون" || title === "الإعدادات" || title === "الدليفري";
           return <Pressable key={title} disabled={!enabled} onPress={() => {
             if (title === "المستخدمون") router.push("/admin/users");
-            if (title === "الإعدادات") router.push("/admin/settings");\n            if (title === "الدليفري") router.push("/admin/drivers");
+            if (title === "الإعدادات") router.push("/admin/settings");
+            if (title === "الدليفري") router.push("/admin/drivers");
           }} style={({ pressed }) => [styles.card, !enabled && styles.disabledCard, pressed && styles.pressed]}>
             <View style={styles.cardIcon}><Text style={styles.iconText}>{icon}</Text></View>
             <View style={styles.cardBody}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.cardText}>{enabled ? description : "سيتم تفعيلها مع ربط البيانات."}</Text></View>
