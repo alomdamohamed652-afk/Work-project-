@@ -37,7 +37,7 @@ export default function Auth() {
         ["auth_user", JSON.stringify(data.user)],
       ]);
 
-      router.replace(data.user.role === "admin" ? "/admin" : "/home");
+      router.replace(data.user.role === "admin" ? "/admin" : data.user.role === "driver" ? "/driver" : "/home");
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر الاتصال بالخادم");
     } finally {
