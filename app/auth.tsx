@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
+import { fonts } from "@/constants/fonts";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -72,20 +73,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.background },
   page: { flex: 1, paddingHorizontal: 24, paddingTop: 8, justifyContent: "space-between" },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", alignSelf: "flex-start" },
-  backText: { fontSize: 24, color: theme.text },
+  backText: { fontSize: 24, color: theme.text, fontWeight: fonts.weight.medium },
   header: { alignItems: "center" },
   logo: { width: 58, height: 58, borderRadius: 18, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", marginBottom: 20 },
-  logoText: { color: "#fff", fontSize: 30, fontWeight: "900" },
-  title: { color: theme.text, fontSize: 31, fontWeight: "900", textAlign: "center" },
-  subtitle: { color: theme.muted, fontSize: 15, marginTop: 9, textAlign: "center" },
+  logoText: { color: "#fff", fontSize: 30, fontWeight: fonts.weight.heavy },
+  title: { color: theme.text, fontSize: 31, fontWeight: fonts.weight.heavy, textAlign: "center" },
+  subtitle: { color: theme.muted, fontSize: fonts.size.md, fontWeight: fonts.weight.regular, marginTop: 9, textAlign: "center" },
   form: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 20, padding: 18 },
-  label: { color: theme.text, fontSize: 14, fontWeight: "800", textAlign: "right", marginBottom: 9 },
-  input: { minHeight: 56, borderWidth: 1, borderColor: theme.border, borderRadius: 15, paddingHorizontal: 16, color: theme.text, fontSize: 16, backgroundColor: theme.background },
-  helper: { color: theme.muted, fontSize: 12, lineHeight: 19, textAlign: "right", marginTop: 9 },
-  error: { color: "#B42318", fontSize: 12, lineHeight: 19, textAlign: "right", marginTop: 9 },
+  label: { color: theme.text, fontSize: fonts.size.md, fontWeight: fonts.weight.bold, textAlign: "right", marginBottom: 9 },
+  input: { minHeight: 56, borderWidth: 1, borderColor: theme.border, borderRadius: 15, paddingHorizontal: 16, color: theme.text, fontSize: fonts.size.lg, fontWeight: fonts.weight.regular, backgroundColor: theme.background },
+  helper: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, lineHeight: 19, textAlign: "right", marginTop: 9 },
+  error: { color: theme.danger, fontSize: fonts.size.xs, fontWeight: fonts.weight.medium, lineHeight: 19, textAlign: "right", marginTop: 9 },
   button: { minHeight: 56, borderRadius: 15, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", marginTop: 17 },
-  buttonText: { color: "#fff", fontSize: 17, fontWeight: "800" },
+  buttonText: { color: "#fff", fontSize: fonts.size.lg, fontWeight: fonts.weight.bold, textAlign: "center" },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.82 },
-  footer: { color: theme.muted, fontSize: 11, textAlign: "center", paddingBottom: 14 }
+  footer: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, textAlign: "center", paddingBottom: 14 }
 });
