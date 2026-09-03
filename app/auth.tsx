@@ -1,18 +1,47 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
 
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
+
 export default function Auth() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const valid = phone.replaceAll(" ", "").replaceAll("-", "").length >= 10;
+  const [error, setError] = useState("");
+  const valid = /^01\d{9}$/.test(phone.replace(/[\s-]/g, ""));
 
-  const continueToHome = () => {
-    if (!valid) return;
+  const continueToApp = async () => {
+    if (!valid || loading) return;
+    if (!API_URL) {
+      setError("رابط الخادم غير مضبوط. أضف EXPO_PUBLIC_API_URL ثم أعد تشغيل Expo.");
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => router.replace("/home"), 350);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/api/auth/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.replace(/[\s-]/g, "") }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "تعذر تسجيل الدخول");
+
+      await AsyncStorage.multiSet([
+        ["auth_token", data.token],
+        ["auth_user", JSON.stringify(data.user)],
+      ]);
+
+      router.replace(data.user.role === "admin" ? "/admin" : "/home");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر الاتصال بالخادم");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,8 +56,9 @@ export default function Auth() {
         <View style={styles.form}>
           <Text style={styles.label}>رقم الهاتف</Text>
           <TextInput value={phone} onChangeText={setPhone} placeholder="01XXXXXXXXX" placeholderTextColor="#A0A0A0" keyboardType="phone-pad" textAlign="right" style={styles.input} maxLength={11} />
-          <Text style={styles.helper}>سيتم إنشاء حساب عميل جديد تلقائيًا عند أول استخدام.</Text>
-          <Pressable disabled={!valid || loading} onPress={continueToHome} style={({ pressed }) => [styles.button, (!valid || loading) && styles.disabled, pressed && styles.pressed]}>
+          <Text style={styles.helper}>سيتم التحقق من الحساب من الخادم. رمز OTP هنضيفه لاحقًا.</Text>
+          {!!error && <Text style={styles.error}>{error}</Text>}
+          <Pressable disabled={!valid || loading} onPress={continueToApp} style={({ pressed }) => [styles.button, (!valid || loading) && styles.disabled, pressed && styles.pressed]}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>متابعة</Text>}
           </Pressable>
         </View>
@@ -52,6 +82,7 @@ const styles = StyleSheet.create({
   label: { color: theme.text, fontSize: 14, fontWeight: "800", textAlign: "right", marginBottom: 9 },
   input: { minHeight: 56, borderWidth: 1, borderColor: theme.border, borderRadius: 15, paddingHorizontal: 16, color: theme.text, fontSize: 16, backgroundColor: theme.background },
   helper: { color: theme.muted, fontSize: 12, lineHeight: 19, textAlign: "right", marginTop: 9 },
+  error: { color: "#B42318", fontSize: 12, lineHeight: 19, textAlign: "right", marginTop: 9 },
   button: { minHeight: 56, borderRadius: 15, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", marginTop: 17 },
   buttonText: { color: "#fff", fontSize: 17, fontWeight: "800" },
   disabled: { opacity: 0.45 },
