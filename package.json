@@ -14,21 +14,21 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~57.0.0",
-    "expo-location": "~20.0.0",
-    "expo-notifications": "~0.32.0",
-    "expo-router": "~7.0.0",
-    "react": "19.1.1",
-    "react-native": "0.82.1",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0",
+    "expo": "~57.0.17",
+    "expo-location": "~57.0.15",
+    "expo-notifications": "~57.0.16",
+    "expo-router": "~57.0.18",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.18.0",
     "express": "^5.1.0",
     "pg": "^8.16.3",
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-    "@types/react": "~19.1.10",
-    "typescript": "~5.9.2"
+    "@types/react": "~19.2.0",
+    "typescript": "~5.9.3"
   }
 }
