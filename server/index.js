@@ -1,43 +1,33 @@
 const express = require("express");
-const { Pool } = require("pg");
+const { pool } = require("./db");
+const authRoutes = require("./routes/auth");
+const adminRoutes = require("./routes/admin");
+const healthRoutes = require("./routes/health");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 
-app.use(express.json());
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-});
-
-app.get("/health", async (_req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW() AS database_time");
-    res.json({
-      ok: true,
-      service: "work-project-api",
-      database: "connected",
-      databaseTime: result.rows[0].database_time,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error("Database health check failed:", error);
-    res.status(503).json({
-      ok: false,
-      service: "work-project-api",
-      database: "disconnected"
-    });
-  }
-});
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (_req, res) => {
-  res.json({
-    name: "Work-project API",
-    status: "running"
-  });
+  res.json({ name: "Work-project API", status: "running" });
 });
 
-app.listen(port, "0.0.0.0", () => {
-  console.log(`API listening on port ${port}`);
+app.use("/health", healthRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+async function start() {
+  await pool.query("SELECT 1");
+  app.listen(port, "0.0.0.0", () => console.log(`API listening on port ${port}`));
+}
+
+start().catch((error) => {
+  console.error("Unable to start API:", error);
+  process.exit(1);
 });
