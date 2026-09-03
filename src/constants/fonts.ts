@@ -24,5 +24,5 @@ export const fonts = {
   },
 } as const;
 
-// Typography is centralized here so the new brand can switch to bundled Arabic
-// fonts (for example Cairo/Tajawal) without touching every screen.
+// Brand typography is intentionally centralized. When the final identity font
+// files are approved, only these family names need to change.
