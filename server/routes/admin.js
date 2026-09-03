@@ -62,4 +62,48 @@ router.patch("/users/:id", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get("/settings", async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query("SELECT key, value, updated_at FROM platform_settings ORDER BY key");
+    res.json({ settings: rows });
+  } catch (error) { next(error); }
+});
+
+router.patch("/settings", async (req, res, next) => {
+  try {
+    const settings = req.body?.settings;
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+      return res.status(400).json({ error: "settings must be an object" });
+    }
+
+    const entries = Object.entries(settings);
+    if (!entries.length) return res.status(400).json({ error: "No settings supplied" });
+
+    await pool.query("BEGIN");
+    try {
+      for (const [key, value] of entries) {
+        const normalizedKey = String(key).trim();
+        if (!/^[a-z][a-z0-9_.-]{0,63}$/i.test(normalizedKey)) {
+          await pool.query("ROLLBACK");
+          return res.status(400).json({ error: `Invalid setting key: ${normalizedKey}` });
+        }
+        await pool.query(
+          `INSERT INTO platform_settings (key, value, updated_at)
+           VALUES ($1, $2, now())
+           ON CONFLICT (key) DO UPDATE
+           SET value = EXCLUDED.value, updated_at = now()`,
+          [normalizedKey, value == null ? "" : String(value)]
+        );
+      }
+      await pool.query("COMMIT");
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
+
+    const { rows } = await pool.query("SELECT key, value, updated_at FROM platform_settings ORDER BY key");
+    res.json({ settings: rows });
+  } catch (error) { next(error); }
+});
+
 module.exports = router;
