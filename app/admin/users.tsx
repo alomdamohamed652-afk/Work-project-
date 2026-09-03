@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { theme } from "@/constants/theme";
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\\/$/, "");
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 type User = {
   id: string; full_name: string; phone?: string | null; email?: string | null;
