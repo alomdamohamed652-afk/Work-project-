@@ -59,7 +59,8 @@ export default function Auth() {
           <TextInput value={phone} onChangeText={setPhone} placeholder="01XXXXXXXXX" placeholderTextColor="#A0A0A0" keyboardType="phone-pad" textAlign="right" style={styles.input} maxLength={11} />
           <Text style={styles.helper}>سيتم التحقق من الحساب من الخادم. رمز OTP هنضيفه لاحقًا.</Text>
           {!!error && <Text style={styles.error}>{error}</Text>}
-          <Pressable onPress={() => router.push("/register")} style={styles.registerButton}><Text style={styles.registerText}>إنشاء حساب جديد</Text></Pressable>\n          <Pressable disabled={!valid || loading} onPress={continueToApp} style={({ pressed }) => [styles.button, (!valid || loading) && styles.disabled, pressed && styles.pressed]}>
+          <Pressable onPress={() => router.push("/register")} style={styles.registerButton}><Text style={styles.registerText}>إنشاء حساب جديد</Text></Pressable>
+          <Pressable disabled={!valid || loading} onPress={continueToApp} style={({ pressed }) => [styles.button, (!valid || loading) && styles.disabled, pressed && styles.pressed]}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>متابعة</Text>}
           </Pressable>
         </View>
@@ -85,7 +86,9 @@ const styles = StyleSheet.create({
   helper: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, lineHeight: 19, textAlign: "right", marginTop: 9 },
   error: { color: theme.danger, fontSize: fonts.size.xs, fontWeight: fonts.weight.medium, lineHeight: 19, textAlign: "right", marginTop: 9 },
   button: { minHeight: 56, borderRadius: 15, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", marginTop: 17 },
-  buttonText: { color: "#fff", fontSize: fonts.size.lg, fontWeight: fonts.weight.bold, textAlign: "center" },\n  registerButton: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", marginTop: 10 },\n  registerText: { color: theme.text, fontSize: fonts.size.md, fontWeight: fonts.weight.bold },
+  buttonText: { color: "#fff", fontSize: fonts.size.lg, fontWeight: fonts.weight.bold, textAlign: "center" },
+  registerButton: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  registerText: { color: theme.text, fontSize: fonts.size.md, fontWeight: fonts.weight.bold },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.82 },
   footer: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, textAlign: "center", paddingBottom: 14 }
