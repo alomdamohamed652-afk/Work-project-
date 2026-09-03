@@ -84,7 +84,7 @@ async function main() {
       customer_id UUID NOT NULL REFERENCES users(id),
       driver_id UUID REFERENCES users(id),
       restaurant_id UUID REFERENCES users(id),
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','preparing','ready','assigned','picked_up','on_the_way','delivered','cancelled')),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','restaurant_pending','restaurant_rejected','admin_rejected','confirmed','preparing','ready','assigned','picked_up','on_the_way','delivered','cancelled')),
       delivery_latitude DOUBLE PRECISION,
       delivery_longitude DOUBLE PRECISION,
       delivery_address TEXT,
@@ -95,6 +95,10 @@ async function main() {
 
     CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS orders_driver_idx ON orders(driver_id, status, updated_at DESC);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_rejection_reason TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_rejection_reason TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by UUID REFERENCES users(id);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
   `);
 
   const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\s-]/g, '');
