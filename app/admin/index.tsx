@@ -76,8 +76,9 @@ export default function AdminHome() {
 
         <Text style={styles.section}>الوصول السريع</Text>
         {cards.map(([icon, title, description]) => {
-          const enabled = title === "المستخدمون" || title === "الإعدادات" || title === "الدليفري";
+          const enabled = title === "الطلبات" || title === "المستخدمون" || title === "الإعدادات" || title === "الدليفري";
           return <Pressable key={title} disabled={!enabled} onPress={() => {
+            if (title === "الطلبات") router.push("/admin/orders");
             if (title === "المستخدمون") router.push("/admin/users");
             if (title === "الإعدادات") router.push("/admin/settings");
             if (title === "الدليفري") router.push("/admin/drivers");
