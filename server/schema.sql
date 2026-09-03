@@ -14,6 +14,5 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS users_role_idx ON users(role);
 CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
 
--- Run this once manually to designate the primary admin account.
--- Replace the email with the exact account email after registering it:
--- UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
+-- The first admin is assigned by the one-time seed below.
+
