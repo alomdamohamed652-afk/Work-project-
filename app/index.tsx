@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
+import { fonts } from "@/constants/fonts";
 
 export default function Landing() {
   return (
@@ -43,20 +44,20 @@ const styles = StyleSheet.create({
   brand: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   logo: { width: 42, height: 42, borderRadius: 13, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
   logoText: { color: "#fff", fontSize: 23, fontWeight: "900" },
-  brandName: { color: theme.text, fontSize: 22, fontWeight: "900" },
+  brandName: { color: theme.text, fontSize: fonts.size.xxl, fontWeight: fonts.weight.heavy, textAlign: "right" },
   hero: { alignItems: "flex-end", width: "100%" },
   badge: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 7, marginBottom: 18 },
-  badgeText: { color: theme.primary, fontSize: 13, fontWeight: "700" },
-  title: { color: theme.text, fontSize: 42, lineHeight: 50, fontWeight: "900", textAlign: "right", width: "100%" },
-  subtitle: { color: theme.muted, fontSize: 16, lineHeight: 27, textAlign: "right", marginTop: 16, width: "100%" },
+  badgeText: { color: theme.primary, fontSize: fonts.size.sm, fontWeight: fonts.weight.bold, textAlign: "right" },
+  title: { color: theme.text, fontSize: 42, lineHeight: 50, fontWeight: fonts.weight.heavy, textAlign: "right", width: "100%" },
+  subtitle: { color: theme.muted, fontSize: fonts.size.lg, lineHeight: 27, fontWeight: fonts.weight.regular, textAlign: "right", marginTop: 16, width: "100%" },
   primary: { marginTop: 26, width: "100%", minHeight: 58, borderRadius: 17, backgroundColor: theme.primary, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 12 },
   pressed: { opacity: 0.82 },
-  primaryText: { color: "#fff", fontSize: 17, fontWeight: "800" },
-  primaryArrow: { color: "#fff", fontSize: 20 },
+  primaryText: { color: "#fff", fontSize: fonts.size.lg, fontWeight: fonts.weight.bold, textAlign: "center" },
+  primaryArrow: { color: "#fff", fontSize: 20, fontWeight: fonts.weight.bold },
   features: { flexDirection: "row-reverse", gap: 9 },
   feature: { flex: 1, minHeight: 112, backgroundColor: theme.surface, borderRadius: 17, borderWidth: 1, borderColor: theme.border, padding: 12, alignItems: "center" },
   featureIcon: { fontSize: 22, marginBottom: 5 },
-  featureTitle: { color: theme.text, fontSize: 14, fontWeight: "800" },
-  featureText: { color: theme.muted, fontSize: 11, textAlign: "center", marginTop: 5, lineHeight: 16 },
-  footer: { color: theme.muted, fontSize: 12, textAlign: "center" }
+  featureTitle: { color: theme.text, fontSize: fonts.size.md, fontWeight: fonts.weight.bold, textAlign: "center" },
+  featureText: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, textAlign: "center", marginTop: 5, lineHeight: 16 },
+  footer: { color: theme.muted, fontSize: fonts.size.xs, fontWeight: fonts.weight.regular, textAlign: "center" }
 });
