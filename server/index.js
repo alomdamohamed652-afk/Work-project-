@@ -5,6 +5,7 @@ const adminRoutes = require("./routes/admin");
 const healthRoutes = require("./routes/health");
 const categoryRoutes = require("./routes/categories");
 const locationRoutes = require("./routes/location");
+const orderRoutes = require("./routes/orders");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -16,6 +17,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/location", locationRoutes);
+app.use("/api/orders", orderRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
