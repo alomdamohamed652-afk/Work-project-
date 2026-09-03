@@ -1,5 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
 
@@ -13,7 +15,47 @@ const cards = [
   ["⚙️", "الإعدادات", "التوصيل والدفع والدعم"],
 ];
 
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\\/$/, "");
+
 export default function AdminHome() {
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem("auth_token");
+        if (!token || !API_URL) {
+          router.replace("/auth");
+          return;
+        }
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (!response.ok || data.user?.role !== "admin") {
+          router.replace("/home");
+          return;
+        }
+      } catch {
+        router.replace("/auth");
+        return;
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
+
+  if (checking) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={styles.loadingText}>جاري التحقق من صلاحيات الإدارة...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -61,6 +103,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.background },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  loadingText: { color: theme.muted, marginTop: 12, textAlign: "center" },
   page: { flex: 1 },
   content: { padding: 20, paddingBottom: 35 },
   top: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 22 },
