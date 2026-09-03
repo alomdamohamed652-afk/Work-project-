@@ -3,6 +3,59 @@ const router = express.Router();
 const { pool } = require("../db");
 const { bcrypt, signToken, requireAuth } = require("../auth");
 
+function normalizePhone(value) {
+  return String(value || "").replace(/[\s-]/g, "");
+}
+
+router.post("/continue", async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    if (!/^01\d{9}$/.test(phone)) {
+      return res.status(400).json({ error: "رقم الهاتف غير صحيح" });
+    }
+
+    const primaryAdminPhone = normalizePhone(process.env.PRIMARY_ADMIN_PHONE);
+    const isPrimaryAdmin = Boolean(primaryAdminPhone && phone === primaryAdminPhone);
+
+    let { rows } = await pool.query(
+      "SELECT id, full_name, phone, email, password_hash, role, status, created_at, updated_at FROM users WHERE phone = $1 LIMIT 1",
+      [phone]
+    );
+
+    let user = rows[0];
+
+    if (!user) {
+      // Password auth is intentionally not exposed in the current phone-only flow.
+      const passwordHash = await bcrypt.hash(require("crypto").randomUUID(), 10);
+      ({ rows } = await pool.query(
+        `INSERT INTO users (full_name, phone, password_hash, role)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, full_name, phone, email, password_hash, role, status, created_at, updated_at`,
+        [isPrimaryAdmin ? "مدير النظام" : "عميل جديد", phone, passwordHash, isPrimaryAdmin ? "admin" : "customer"]
+      ));
+      user = rows[0];
+    } else if (isPrimaryAdmin && user.role !== "admin") {
+      ({ rows } = await pool.query(
+        `UPDATE users SET role = 'admin', status = 'active', updated_at = now()
+         WHERE id = $1
+         RETURNING id, full_name, phone, email, password_hash, role, status, created_at, updated_at`,
+        [user.id]
+      ));
+      user = rows[0];
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({ error: "الحساب غير متاح حاليًا" });
+    }
+
+    delete user.password_hash;
+    res.json({ user, token: signToken(user) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "تعذر تسجيل الدخول" });
+  }
+});
+
 router.post("/register", async (req, res) => {
   try {
     const { fullName, phone, email, password } = req.body;
@@ -14,12 +67,10 @@ router.post("/register", async (req, res) => {
     }
 
     const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
-    const normalizedPhone = phone ? String(phone).trim() : null;
+    const normalizedPhone = phone ? normalizePhone(phone) : null;
     const passwordHash = await bcrypt.hash(String(password), 12);
 
-    const primaryAdminPhone = process.env.PRIMARY_ADMIN_PHONE
-      ? String(process.env.PRIMARY_ADMIN_PHONE).trim()
-      : null;
+    const primaryAdminPhone = normalizePhone(process.env.PRIMARY_ADMIN_PHONE);
     const role = normalizedPhone && primaryAdminPhone && normalizedPhone === primaryAdminPhone
       ? "admin"
       : "customer";
@@ -48,7 +99,7 @@ router.post("/login", async (req, res) => {
     const value = String(identifier).trim().toLowerCase();
     const { rows } = await pool.query(
       "SELECT id, full_name, phone, email, password_hash, role, status, created_at, updated_at FROM users WHERE lower(coalesce(email,'')) = $1 OR phone = $2 LIMIT 1",
-      [value, String(identifier).trim()]
+      [value, normalizePhone(identifier)]
     );
     const user = rows[0];
     if (!user || user.status !== "active") return res.status(401).json({ error: "Invalid credentials" });
