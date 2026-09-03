@@ -32,9 +32,15 @@ async function main() {
     );
 
     CREATE INDEX IF NOT EXISTS categories_active_order_idx ON categories(is_active, sort_order, created_at);
+
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
 
-  const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\\s-]/g, '');
+  const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\s-]/g, '');
   if (adminPhone) {
     await pool.query(
       `UPDATE users SET role = 'admin', status = 'active', updated_at = now() WHERE phone = $1`,
