@@ -22,7 +22,7 @@ router.post("/", requireAuth, requireRole("customer"), async (req, res, next) =>
     const { rows } = await pool.query(
       `INSERT INTO orders
         (customer_id, restaurant_id, status, delivery_latitude, delivery_longitude, delivery_address, total_amount)
-       VALUES ($1,$2,'pending',$3,$4,$5,$6)
+       VALUES ($1,$2,CASE WHEN $2 IS NULL THEN 'pending' ELSE 'restaurant_pending' END,$3,$4,$5,$6)
        RETURNING *`,
       [
         req.user.id,
@@ -36,6 +36,38 @@ router.post("/", requireAuth, requireRole("customer"), async (req, res, next) =>
     res.status(201).json({ order: rows[0] });
   } catch (error) { next(error); }
 });
+
+
+// Restaurant/Admin workflow: both may decide; admin can override restaurant when needed.
+router.patch("/:id/restaurant-decision", requireAuth, requireRole("restaurant","admin","staff"), async (req,res,next)=>{
+ try{
+  const approve=Boolean(req.body?.approve), reason=String(req.body?.reason||"").trim();
+  if(!approve&&!reason) return res.status(400).json({error:"اكتب سبب الرفض"});
+  const where=req.user.role==="restaurant" ? "restaurant_id=$2" : "TRUE";
+  const q=approve
+   ? `UPDATE orders SET status='confirmed',updated_at=now() WHERE id=$1 AND ${where} AND status='restaurant_pending' RETURNING *`
+   : `UPDATE orders SET status='restaurant_rejected',restaurant_rejection_reason=$3,updated_at=now() WHERE id=$1 AND ${where} AND status='restaurant_pending' RETURNING *`;
+  const params=req.user.role==="restaurant"?[req.params.id,req.user.id,reason]:[req.params.id,null,reason];
+  const {rows}=await pool.query(q,params); if(!rows[0]) return res.status(404).json({error:"الطلب غير متاح لاتخاذ القرار"}); res.json({order:rows[0]});
+ }catch(e){next(e)}
+});
+
+router.patch("/:id/admin-decision", requireAuth, requireRole("admin","staff"), async(req,res,next)=>{
+ try{
+  const approve=Boolean(req.body?.approve),reason=String(req.body?.reason||"").trim();
+  if(!approve&&!reason)return res.status(400).json({error:"اكتب سبب الرفض"});
+  const {rows}=await pool.query(approve
+   ? `UPDATE orders SET status='confirmed',updated_at=now() WHERE id=$1 AND status IN ('pending','restaurant_pending') RETURNING *`
+   : `UPDATE orders SET status='admin_rejected',admin_rejection_reason=$2,updated_at=now() WHERE id=$1 AND status NOT IN ('delivered','cancelled') RETURNING *`,
+   approve?[req.params.id]:[req.params.id,reason]);
+  if(!rows[0])return res.status(404).json({error:"الطلب غير متاح"});res.json({order:rows[0]});
+ }catch(e){next(e)}
+});
+
+router.patch("/:id/cancel", requireAuth, requireRole("admin","staff","restaurant","customer"), async(req,res,next)=>{
+ try{const reason=String(req.body?.reason||"").trim();if(!reason)return res.status(400).json({error:"اكتب سبب الإلغاء"});
+ const {rows}=await pool.query(`UPDATE orders SET status='cancelled',cancelled_by=$1,cancellation_reason=$2,updated_at=now() WHERE id=$3 AND status NOT IN ('delivered','cancelled') RETURNING *`,[req.user.id,reason,req.params.id]);
+ if(!rows[0])return res.status(404).json({error:"الطلب غير متاح للإلغاء"});res.json({order:rows[0]});}catch(e){next(e)}});
 
 router.get("/mine", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
