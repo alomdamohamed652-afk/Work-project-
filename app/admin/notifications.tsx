@@ -1,0 +1,34 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
+import { useState } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "@/constants/theme";
+
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
+const audiences = [{ key: "all", label: "الكل" }, { key: "customer", label: "العملاء" }, { key: "driver", label: "الدليفري" }, { key: "restaurant", label: "المطاعم" }, { key: "staff", label: "الموظفين" }];
+
+export default function AdminNotifications() {
+  const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [audience, setAudience] = useState("all"); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const send = async () => {
+    try {
+      if (!title.trim() || !body.trim()) return setError("اكتب عنوان ونص الإشعار");
+      setBusy(true); setError(""); const token = await AsyncStorage.getItem("auth_token");
+      const r = await fetch(API_URL + "/api/notifications/broadcast", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: title.trim(), body: body.trim(), audience }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "تعذر إرسال الإشعار");
+      setTitle(""); setBody(""); Alert.alert("تم الإرسال", `تم إرسال الإشعار إلى ${d.sent || 0} مستخدم.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "تعذر إرسال الإشعار"); } finally { setBusy(false); }
+  };
+  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <View style={s.head}><Pressable onPress={() => router.back()} style={s.back}><Text style={s.backText}>→</Text></Pressable><View style={{ flex: 1 }}><Text style={s.eyebrow}>الإدارة</Text><Text style={s.title}>إرسال إشعار</Text></View></View>
+    <View style={s.card}><Text style={s.label}>الفئة المستهدفة</Text><View style={s.chips}>{audiences.map(a => <Pressable key={a.key} onPress={() => setAudience(a.key)} style={[s.chip, audience === a.key && s.chipActive]}><Text style={[s.chipText, audience === a.key && s.chipTextActive]}>{a.label}</Text></Pressable>)}</View>
+      <Text style={s.label}>عنوان الإشعار</Text><TextInput value={title} onChangeText={setTitle} placeholder="مثال: عرض اليوم" placeholderTextColor={theme.muted} style={s.input} textAlign="right" />
+      <Text style={s.label}>نص الإشعار</Text><TextInput value={body} onChangeText={setBody} placeholder="اكتب الرسالة التي ستصل للمستخدمين" placeholderTextColor={theme.muted} style={[s.input, s.textarea]} multiline textAlign="right" />
+      {!!error && <Text style={s.error}>{error}</Text>}
+      <Pressable disabled={busy} onPress={send} style={[s.button, busy && { opacity: .6 }]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>إرسال الإشعار</Text>}</Pressable>
+    </View>
+    <View style={s.note}><Text style={s.noteTitle}>ملاحظة</Text><Text style={s.noteText}>الإشعار بيتسجل داخل صندوق إشعارات المستخدم، ويمكن استخدامه لاحقًا مع Push Notifications.</Text></View>
+  </ScrollView></SafeAreaView>;
+}
+
+const s = StyleSheet.create({ safe:{flex:1,backgroundColor:theme.background}, content:{padding:20,paddingBottom:40}, head:{flexDirection:"row-reverse",alignItems:"center",gap:12,marginBottom:18}, back:{width:44,height:44,borderRadius:14,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,alignItems:"center",justifyContent:"center"}, backText:{color:theme.text,fontSize:24}, eyebrow:{color:theme.muted,fontSize:11,textAlign:"right"}, title:{color:theme.text,fontSize:27,fontWeight:"900",textAlign:"right",marginTop:3}, card:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:20,padding:16}, label:{color:theme.text,fontSize:13,fontWeight:"900",textAlign:"right",marginTop:7,marginBottom:8}, chips:{flexDirection:"row-reverse",flexWrap:"wrap",gap:8,marginBottom:8}, chip:{paddingHorizontal:14,paddingVertical:10,borderRadius:12,borderWidth:1,borderColor:theme.border,backgroundColor:theme.background}, chipActive:{backgroundColor:theme.primary,borderColor:theme.primary}, chipText:{color:theme.muted,fontSize:12,fontWeight:"800"}, chipTextActive:{color:"#fff"}, input:{minHeight:50,borderRadius:14,borderWidth:1,borderColor:theme.border,backgroundColor:theme.background,color:theme.text,paddingHorizontal:14,marginBottom:9}, textarea:{minHeight:120,paddingTop:13,textAlignVertical:"top"}, error:{color:theme.danger,textAlign:"right",fontSize:12,fontWeight:"800",marginVertical:7}, button:{height:52,borderRadius:15,backgroundColor:theme.primary,alignItems:"center",justifyContent:"center",marginTop:8}, buttonText:{color:"#fff",fontWeight:"900"}, note:{marginTop:12,padding:14,borderRadius:16,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border}, noteTitle:{color:theme.text,fontWeight:"900",textAlign:"right"}, noteText:{color:theme.muted,fontSize:11,lineHeight:18,textAlign:"right",marginTop:5} });
