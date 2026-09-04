@@ -10,6 +10,7 @@ const cards = [
   ["📦", "الطلبات", "إدارة الطلبات ومتابعتها", "/admin/orders"],
   ["🛵", "الدليفري", "المندوبون والحركة والحسابات", "/admin/drivers"],
   ["🏪", "المطاعم", "إدارة المطاعم والمنيو والحالة", "/admin/restaurants"],
+  ["🗂️", "التصنيفات", "إضافة وترتيب وإخفاء تصنيفات المطاعم", "/admin/categories"],
   ["👥", "المستخدمون", "تعيين الأدوار والصلاحيات", "/admin/users"],
   ["✉️", "الدعوات", "دعوات آمنة للمطاعم والدليفري والموظفين", "/admin/invitations"],
   ["💰", "المالية", "التسويات والعهد والسلف", ""],
@@ -22,7 +23,7 @@ type Stats={users:number;activeDrivers:number;activeRestaurants:number;activeCat
 
 export default function AdminHome(){
  const [checking,setChecking]=useState(true),[stats,setStats]=useState<Stats|null>(null),[error,setError]=useState("");
- useEffect(()=>{(async()=>{try{const token=await AsyncStorage.getItem("auth_token");if(!token||!API_URL){router.replace("/auth");return;}const meResponse=await fetch(`${API_URL}/api/auth/me`,{headers:{Authorization:`Bearer ${token}`}});const me=await meResponse.json();if(!meResponse.ok||me.user?.role!=="admin"){router.replace("/home");return;}const r=await fetch(`${API_URL}/api/admin/stats`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر تحميل الإحصائيات");setStats(d);}catch(e){setError(e instanceof Error?e.message:"تعذر تحميل البيانات");}finally{setChecking(false);}})();},[]);
+ useEffect(()=>{(async()=>{try{const token=await AsyncStorage.getItem("auth_token");if(!token||!API_URL){router.replace("/auth");return;}const meResponse=await fetch(`${API_URL}/api/auth/me`,{headers:{Authorization:`Bearer ${token}`}});const me=await meResponse.json();if(!meResponse.ok||me.user?.role!=="admin"){router.replace("/home");return;}const r=await fetch(`${API_URL}/api/admin/stats`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر تحميل الإحصائيات");setStats(d);}catch(e){setError(e instanceof Error?e.message:"تعذر تحميل البيانات")}finally{setChecking(false)}})()},[]);
  if(checking)return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator size="large" color={theme.primary}/><Text style={styles.loadingText}>جاري تحميل لوحة الإدارة...</Text></View></SafeAreaView>;
  return <SafeAreaView style={styles.safe}><ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}><View style={styles.top}><View><Text style={styles.eyebrow}>لوحة الإدارة</Text><Text style={styles.title}>مرحبًا، مدير النظام</Text></View><View style={styles.adminBadge}><Text style={styles.adminIcon}>A</Text></View></View>
  {error?<View style={styles.error}><Text style={styles.errorText}>{error}</Text></View>:null}
