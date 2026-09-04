@@ -1,0 +1,46 @@
+const { pool } = require("./db");
+
+async function main() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code TEXT NOT NULL UNIQUE,
+      discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage','fixed')),
+      discount_value NUMERIC(12,2) NOT NULL CHECK (discount_value > 0),
+      min_order_amount NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (min_order_amount >= 0),
+      max_discount NUMERIC(12,2) CHECK (max_discount IS NULL OR max_discount >= 0),
+      usage_limit INTEGER CHECK (usage_limit IS NULL OR usage_limit > 0),
+      used_count INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
+      starts_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CHECK (expires_at IS NULL OR expires_at > starts_at),
+      CHECK (discount_type <> 'percentage' OR discount_value <= 100)
+    );
+    CREATE INDEX IF NOT EXISTS coupons_active_dates_idx ON coupons(is_active,starts_at,expires_at);
+    CREATE TABLE IF NOT EXISTS coupon_usages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      coupon_id UUID NOT NULL REFERENCES coupons(id) ON DELETE RESTRICT,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      checkout_id UUID NOT NULL REFERENCES checkout_sessions(id) ON DELETE RESTRICT,
+      discount_amount NUMERIC(12,2) NOT NULL CHECK (discount_amount >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(coupon_id, checkout_id),
+      UNIQUE(coupon_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS coupon_usages_user_idx ON coupon_usages(user_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS coupon_usages_coupon_idx ON coupon_usages(coupon_id,created_at DESC);
+    ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS coupon_id UUID REFERENCES coupons(id) ON DELETE SET NULL;
+    ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS coupon_code TEXT;
+    ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS orders_coupon_idx ON orders(coupon_code,created_at DESC);
+  `);
+  console.log("Marketing migration completed");
+  await pool.end();
+}
+main().catch(async (e) => { console.error("Marketing migration failed:", e); await pool.end(); process.exit(1); });
