@@ -11,8 +11,7 @@ async function main() {
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended','pending')),
       area TEXT, address TEXT, building TEXT, floor TEXT, apartment TEXT, address_notes TEXT,
       is_online BOOLEAN NOT NULL DEFAULT false, is_available BOOLEAN NOT NULL DEFAULT false, last_seen_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      CONSTRAINT users_contact_check CHECK (phone IS NOT NULL OR email IS NOT NULL)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS secondary_phone TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS area TEXT;
@@ -65,13 +64,35 @@ async function main() {
       key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE TABLE IF NOT EXISTS delivery_zones (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, min_latitude DOUBLE PRECISION, max_latitude DOUBLE PRECISION,
-      min_longitude DOUBLE PRECISION, max_longitude DOUBLE PRECISION, fixed_price NUMERIC(10,2), is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL,
+      min_latitude DOUBLE PRECISION, max_latitude DOUBLE PRECISION,
+      min_longitude DOUBLE PRECISION, max_longitude DOUBLE PRECISION,
+      fixed_price NUMERIC(10,2), is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS center_latitude DOUBLE PRECISION;
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS center_longitude DOUBLE PRECISION;
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS radius_meters INTEGER;
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS base_fee NUMERIC(10,2);
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS included_km NUMERIC(10,2);
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS extra_km_fee NUMERIC(10,2);
+    ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS extra_merchant_fee NUMERIC(10,2);
+    CREATE INDEX IF NOT EXISTS delivery_zones_active_idx ON delivery_zones(is_active);
+
     CREATE TABLE IF NOT EXISTS delivery_distance_rates (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), min_meters INTEGER NOT NULL CHECK (min_meters >= 0), max_meters INTEGER,
       price NUMERIC(10,2) NOT NULL CHECK (price >= 0), is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    CREATE TABLE IF NOT EXISTS checkout_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      delivery_latitude DOUBLE PRECISION, delivery_longitude DOUBLE PRECISION, delivery_address TEXT,
+      restaurants_count INTEGER NOT NULL DEFAULT 1, subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+      delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0, total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL DEFAULT 'cash', order_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created','cancelled','completed')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS checkout_sessions_customer_idx ON checkout_sessions(customer_id,created_at DESC);
 
     CREATE TABLE IF NOT EXISTS user_locations (
       user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, latitude DOUBLE PRECISION NOT NULL, longitude DOUBLE PRECISION NOT NULL,
@@ -86,6 +107,7 @@ async function main() {
 
     CREATE TABLE IF NOT EXISTS orders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES users(id), driver_id UUID REFERENCES users(id), restaurant_id UUID REFERENCES users(id),
+      checkout_id UUID REFERENCES checkout_sessions(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','restaurant_pending','restaurant_rejected','admin_rejected','confirmed','preparing','ready','assigned','picked_up','on_the_way','delivered','cancelled')),
       delivery_latitude DOUBLE PRECISION, delivery_longitude DOUBLE PRECISION, delivery_address TEXT, delivery_distance_meters INTEGER,
       delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0, subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -93,6 +115,7 @@ async function main() {
       restaurant_rejection_reason TEXT, admin_rejection_reason TEXT, cancelled_by UUID REFERENCES users(id), cancellation_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS checkout_id UUID REFERENCES checkout_sessions(id) ON DELETE SET NULL;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_rejection_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_rejection_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by UUID REFERENCES users(id);
@@ -106,6 +129,7 @@ async function main() {
     CREATE INDEX IF NOT EXISTS orders_driver_idx ON orders(driver_id,status,updated_at DESC);
     CREATE INDEX IF NOT EXISTS orders_dispatch_idx ON orders(driver_id,status,created_at DESC);
     CREATE INDEX IF NOT EXISTS orders_restaurant_idx ON orders(restaurant_id,status,updated_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_checkout_idx ON orders(checkout_id,created_at);
 
     CREATE TABLE IF NOT EXISTS order_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -141,6 +165,18 @@ async function main() {
     );
     CREATE INDEX IF NOT EXISTS audit_logs_entity_idx ON audit_logs(entity_type,entity_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs(actor_id,created_at DESC);
+  `);
+
+  await pool.query(`
+    INSERT INTO platform_settings(key,value) VALUES
+      ('delivery.base_fee','50'),
+      ('delivery.included_km','2'),
+      ('delivery.extra_km_fee','15'),
+      ('delivery.extra_merchant_fee','15'),
+      ('delivery.max_distance_km',''),
+      ('delivery.max_merchants',''),
+      ('delivery.pricing_mode','distance')
+    ON CONFLICT(key) DO NOTHING
   `);
 
   const adminPhone=String(process.env.PRIMARY_ADMIN_PHONE||'').replace(/[\s-]/g,'');
