@@ -1,155 +1,41 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import MapView,{Circle,Marker,Region} from "react-native-maps";
 import { theme } from "@/constants/theme";
-
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
-
-const fields = [
-  ["delivery_base", "سعر التوصيل الأساسي", "جنيه"],
-  ["delivery_per_km", "سعر كل كيلومتر إضافي", "جنيه"],
-  ["support_phone", "رقم الدعم", ""],
-  ["whatsapp", "رقم WhatsApp", ""],
-  ["bonus_per_order", "بونص المندوب لكل طلب", "جنيه"],
+const API_URL=(process.env.EXPO_PUBLIC_API_URL||"").replace(/\/$/,"");
+const KEYS=[
+ ["delivery.base_fee","سعر التوصيل الأساسي","جنيه"],
+ ["delivery.included_km","المسافة المشمولة في السعر","كم"],
+ ["delivery.extra_km_fee","سعر كل بداية كيلومتر إضافي","جنيه"],
+ ["delivery.extra_merchant_fee","سعر كل جهة إضافية في نفس الطلب","جنيه"],
+ ["delivery.max_distance_km","أقصى مسافة للتوصيل (اختياري)","كم"],
+ ["delivery.max_merchants","أقصى عدد جهات في الطلب (اختياري)","جهة"],
 ] as const;
-
-const toggles = [
-  ["cash_on_delivery", "الدفع عند الاستلام"],
-  ["online_payment", "الدفع الإلكتروني"],
-  ["notifications_enabled", "الإشعارات"],
-] as const;
-
-export default function AdminSettings() {
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const load = async () => {
-    try {
-      setMessage("");
-      const token = await AsyncStorage.getItem("auth_token");
-      if (!token || !API_URL) return;
-      const response = await fetch(`${API_URL}/api/admin/settings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "تعذر تحميل الإعدادات");
-      const next: Record<string, string> = {};
-      for (const item of data.settings || []) next[item.key] = item.value;
-      setValues(next);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "تعذر تحميل الإعدادات");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const setValue = (key: string, value: string) => {
-    setValues(current => ({ ...current, [key]: value }));
-  };
-
-  const toggle = (key: string) => {
-    setValue(key, values[key] === "true" ? "false" : "true");
-  };
-
-  const save = async () => {
-    try {
-      setSaving(true);
-      setMessage("");
-      const token = await AsyncStorage.getItem("auth_token");
-      if (!token || !API_URL) throw new Error("رابط الخادم غير مضبوط");
-      const response = await fetch(`${API_URL}/api/admin/settings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ settings: values }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "تعذر حفظ الإعدادات");
-      const next: Record<string, string> = {};
-      for (const item of data.settings || []) next[item.key] = item.value;
-      setValues(next);
-      setMessage("تم حفظ الإعدادات بنجاح");
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "تعذر حفظ الإعدادات");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return <View style={styles.loading}><ActivityIndicator size="large" color={theme.primary} /><Text style={styles.muted}>جاري تحميل الإعدادات...</Text></View>;
-  }
-
-  return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>إعدادات المنصة</Text>
-      <Text style={styles.subtitle}>القيم دي محفوظة في قاعدة البيانات، وأي تغيير هنا ينعكس على النظام.</Text>
-
-      <Text style={styles.section}>التوصيل والدعم</Text>
-      {fields.map(([key, title, unit]) => (
-        <View key={key} style={styles.card}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              value={values[key] ?? ""}
-              onChangeText={value => setValue(key, value)}
-              placeholder="غير محدد"
-              placeholderTextColor="#A0A0A0"
-              keyboardType={key.includes("phone") || key === "whatsapp" ? "phone-pad" : "decimal-pad"}
-              style={styles.input}
-              textAlign="right"
-            />
-            {!!unit && <Text style={styles.unit}>{unit}</Text>}
-          </View>
-        </View>
-      ))}
-
-      <Text style={styles.section}>طرق الدفع والإشعارات</Text>
-      {toggles.map(([key, title]) => {
-        const enabled = values[key] === "true";
-        return (
-          <Pressable key={key} onPress={() => toggle(key)} style={styles.toggleCard}>
-            <View style={[styles.switch, enabled && styles.switchOn]}>
-              <View style={[styles.knob, enabled && styles.knobOn]} />
-            </View>
-            <Text style={styles.toggleTitle}>{title}</Text>
-          </Pressable>
-        );
-      })}
-
-      {!!message && <Text style={styles.message}>{message}</Text>}
-
-      <Pressable disabled={saving} onPress={save} style={[styles.save, saving && styles.disabled]}>
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>حفظ الإعدادات</Text>}
-      </Pressable>
-    </ScrollView>
-  );
+type Zone={id:string;name:string;center_latitude:number;center_longitude:number;radius_meters:number;base_fee:number|null;included_km:number|null;extra_km_fee:number|null;extra_merchant_fee:number|null;is_active:boolean};
+export default function AdminSettings(){
+ const [values,setValues]=useState<Record<string,string>>({});const [zones,setZones]=useState<Zone[]>([]);const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [message,setMessage]=useState("");
+ const [region,setRegion]=useState<Region>({latitude:30.0444,longitude:31.2357,latitudeDelta:.08,longitudeDelta:.08});const [zoneName,setZoneName]=useState("");const [radius,setRadius]=useState("2000");const [zoneBase,setZoneBase]=useState("");const [zoneIncluded,setZoneIncluded]=useState("");const [zoneKm,setZoneKm]=useState("");const [zoneMerchant,setZoneMerchant]=useState("");
+ const token=async()=>AsyncStorage.getItem("auth_token");
+ const load=async()=>{try{setMessage("");const t=await token();const r=await fetch(`${API_URL}/api/admin/delivery`,{headers:{Authorization:`Bearer ${t}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر تحميل إعدادات التوصيل");const next:Record<string,string>={};for(const x of d.settings||[])next[x.key]=x.value;setValues(next);setZones(d.zones||[])}catch(e){setMessage(e instanceof Error?e.message:"تعذر تحميل البيانات")}finally{setLoading(false)}};
+ useEffect(()=>{load()},[]);
+ const setValue=(k:string,v:string)=>setValues(x=>({...x,[k]:v}));
+ const save=async()=>{try{setSaving(true);setMessage("");const t=await token();const r=await fetch(`${API_URL}/api/admin/delivery`,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${t}`},body:JSON.stringify({settings:values})});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر الحفظ");const next:Record<string,string>={};for(const x of d.settings||[])next[x.key]=x.value;setValues(next);setMessage("تم حفظ إعدادات التسعير")}catch(e){setMessage(e instanceof Error?e.message:"تعذر الحفظ")}finally{setSaving(false)}};
+ const addZone=async()=>{try{setMessage("");if(!zoneName.trim())return setMessage("اكتب اسم المنطقة");const r=await fetch(`${API_URL}/api/admin/delivery/zones`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${await token()}`},body:JSON.stringify({name:zoneName.trim(),centerLatitude:region.latitude,centerLongitude:region.longitude,radiusMeters:Number(radius),baseFee:zoneBase,includedKm:zoneIncluded,extraKmFee:zoneKm,extraMerchantFee:zoneMerchant,isActive:true})});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر إضافة المنطقة");setZones(z=>[d.zone,...z]);setZoneName("");setMessage("تمت إضافة المنطقة")}catch(e){setMessage(e instanceof Error?e.message:"تعذر إضافة المنطقة")}};
+ const toggleZone=async(z:Zone)=>{try{const r=await fetch(`${API_URL}/api/admin/delivery/zones/${z.id}`,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${await token()}`},body:JSON.stringify({isActive:!z.is_active})});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر التعديل");setZones(x=>x.map(a=>a.id===z.id?d.zone:a))}catch(e){setMessage(e instanceof Error?e.message:"تعذر التعديل")}};
+ const removeZone=async(id:string)=>{try{const r=await fetch(`${API_URL}/api/admin/delivery/zones/${id}`,{method:"DELETE",headers:{Authorization:`Bearer ${await token()}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر الحذف");setZones(x=>x.filter(z=>z.id!==id))}catch(e){setMessage(e instanceof Error?e.message:"تعذر الحذف")}};
+ if(loading)return <View style={s.loading}><ActivityIndicator size="large" color={theme.primary}/><Text style={s.muted}>جاري تحميل إعدادات التوصيل...</Text></View>;
+ return <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+  <Text style={s.title}>التوصيل والتسعير</Text><Text style={s.subtitle}>كل الأسعار اختيارية وقابلة للتعديل من الأدمن. لا يوجد حد أدنى للطلب.</Text>
+  <Text style={s.section}>التسعير العام</Text>
+  {KEYS.map(([key,title,unit])=><View key={key} style={s.card}><Text style={s.cardTitle}>{title}</Text><View style={s.inputRow}><TextInput value={values[key]??""} onChangeText={v=>setValue(key,v)} placeholder="غير محدد" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><Text style={s.unit}>{unit}</Text></View></View>)}
+  <View style={s.info}><Text style={s.infoTitle}>طريقة الحساب</Text><Text style={s.infoText}>رسوم التوصيل = السعر الأساسي + رسوم المسافة بعد المسافة المشمولة + رسوم الجهات الإضافية.</Text><Text style={s.infoText}>الجهة الثانية والثالثة والرابعة تضيف نفس السعر المحدد لكل جهة إضافية.</Text></View>
+  <Pressable disabled={saving} onPress={save} style={[s.save,saving&&s.disabled]}>{saving?<ActivityIndicator color="#fff"/>:<Text style={s.saveText}>حفظ التسعير</Text>}</Pressable>
+  <Text style={s.section}>مناطق التوصيل</Text><Text style={s.subtitle}>حرّك الخريطة وحدد مركز المنطقة. الدائرة هي نطاق المنطقة، ويمكن لكل منطقة أن يكون لها تسعير خاص.</Text>
+  <MapView style={s.map} region={region} onRegionChangeComplete={setRegion}><Marker coordinate={{latitude:region.latitude,longitude:region.longitude}}/><Circle center={{latitude:region.latitude,longitude:region.longitude}} radius={Math.max(100,Number(radius)||100)} fillColor="rgba(0,0,0,0.08)" strokeWidth={2}/></MapView>
+  <View style={s.card}><Text style={s.cardTitle}>إنشاء منطقة جديدة</Text><TextInput value={zoneName} onChangeText={setZoneName} placeholder="اسم المنطقة" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/><TextInput value={radius} onChangeText={setRadius} placeholder="نصف القطر بالمتر" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><Text style={s.hint}>مركز المنطقة: {region.latitude.toFixed(5)}, {region.longitude.toFixed(5)}</Text><TextInput value={zoneBase} onChangeText={setZoneBase} placeholder="سعر المنطقة (اختياري)" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><TextInput value={zoneIncluded} onChangeText={setZoneIncluded} placeholder="المسافة المشمولة (اختياري)" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><TextInput value={zoneKm} onChangeText={setZoneKm} placeholder="سعر بداية كل كم إضافي (اختياري)" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><TextInput value={zoneMerchant} onChangeText={setZoneMerchant} placeholder="سعر الجهة الإضافية (اختياري)" placeholderTextColor={theme.muted} keyboardType="decimal-pad" style={s.input} textAlign="right"/><Pressable onPress={addZone} style={s.add}><Text style={s.addText}>+ إضافة المنطقة</Text></Pressable></View>
+  {zones.map(z=><View key={z.id} style={s.zone}><View style={s.zoneTop}><Pressable onPress={()=>removeZone(z.id)}><Text style={s.delete}>حذف</Text></Pressable><Pressable onPress={()=>toggleZone(z)}><Text style={s.toggle}>{z.is_active?"تعطيل":"تفعيل"}</Text></Pressable></View><Text style={s.zoneName}>{z.name}</Text><Text style={s.zoneMeta}>نصف القطر: {(Number(z.radius_meters)/1000).toFixed(2)} كم • المركز: {Number(z.center_latitude).toFixed(4)}, {Number(z.center_longitude).toFixed(4)}</Text><Text style={s.zoneMeta}>الأساسي: {z.base_fee??"العام"} • المشمول: {z.included_km??"العام"} كم • كم إضافي: {z.extra_km_fee??"العام"} • جهة إضافية: {z.extra_merchant_fee??"العام"}</Text></View>)}
+  {!!message&&<Text style={s.message}>{message}</Text>}
+ </ScrollView>;
 }
-
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: theme.background },
-  content: { padding: 20, paddingTop: 55, paddingBottom: 40 },
-  title: { color: theme.text, fontSize: 29, fontWeight: "900", textAlign: "right" },
-  subtitle: { color: theme.muted, lineHeight: 23, textAlign: "right", marginTop: 7, marginBottom: 18 },
-  section: { color: theme.text, fontSize: 19, fontWeight: "900", textAlign: "right", marginTop: 8, marginBottom: 10 },
-  card: { backgroundColor: theme.surface, borderRadius: 17, padding: 15, marginBottom: 9, borderWidth: 1, borderColor: theme.border },
-  cardTitle: { color: theme.text, fontSize: 15, fontWeight: "800", textAlign: "right", marginBottom: 9 },
-  inputRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
-  input: { flex: 1, minHeight: 48, borderWidth: 1, borderColor: theme.border, borderRadius: 13, paddingHorizontal: 13, color: theme.text, backgroundColor: theme.background, fontSize: 15 },
-  unit: { color: theme.muted, fontSize: 12, width: 40, textAlign: "center" },
-  toggleCard: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", backgroundColor: theme.surface, borderRadius: 17, padding: 16, marginBottom: 9, borderWidth: 1, borderColor: theme.border },
-  toggleTitle: { color: theme.text, fontSize: 15, fontWeight: "800" },
-  switch: { width: 48, height: 28, borderRadius: 20, backgroundColor: "#D7D7D7", padding: 3, justifyContent: "center", alignItems: "flex-start" },
-  switchOn: { backgroundColor: theme.primary, alignItems: "flex-end" },
-  knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: "#fff" },
-  knobOn: { alignSelf: "flex-end" },
-  save: { minHeight: 54, borderRadius: 15, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", marginTop: 10 },
-  saveText: { color: "#fff", fontSize: 16, fontWeight: "900" },
-  disabled: { opacity: 0.55 },
-  message: { color: theme.text, textAlign: "right", fontSize: 12, marginTop: 10 },
-  loading: { flex: 1, backgroundColor: theme.background, alignItems: "center", justifyContent: "center", gap: 12 },
-  muted: { color: theme.muted, fontSize: 13 }
-});
+const s=StyleSheet.create({page:{flex:1,backgroundColor:theme.background},content:{padding:20,paddingTop:55,paddingBottom:50},title:{color:theme.text,fontSize:29,fontWeight:"900",textAlign:"right"},subtitle:{color:theme.muted,lineHeight:22,textAlign:"right",marginTop:7,marginBottom:16},section:{color:theme.text,fontSize:20,fontWeight:"900",textAlign:"right",marginTop:10,marginBottom:10},card:{backgroundColor:theme.surface,borderRadius:17,padding:15,marginBottom:9,borderWidth:1,borderColor:theme.border},cardTitle:{color:theme.text,fontSize:15,fontWeight:"800",textAlign:"right",marginBottom:9},inputRow:{flexDirection:"row-reverse",alignItems:"center",gap:8},input:{minHeight:48,borderWidth:1,borderColor:theme.border,borderRadius:13,paddingHorizontal:13,color:theme.text,backgroundColor:theme.background,fontSize:15,marginBottom:9},unit:{color:theme.muted,fontSize:12,width:45,textAlign:"center"},info:{backgroundColor:theme.surface,borderRadius:17,padding:15,borderWidth:1,borderColor:theme.border,marginTop:5},infoTitle:{color:theme.text,fontSize:15,fontWeight:"900",textAlign:"right"},infoText:{color:theme.muted,fontSize:12,lineHeight:20,textAlign:"right",marginTop:6},save:{minHeight:54,borderRadius:15,backgroundColor:theme.primary,alignItems:"center",justifyContent:"center",marginTop:10},saveText:{color:"#fff",fontSize:16,fontWeight:"900"},disabled:{opacity:.55},map:{height:360,borderRadius:18,marginBottom:10},hint:{color:theme.muted,fontSize:11,textAlign:"right",marginBottom:8},add:{height:50,borderRadius:14,backgroundColor:theme.primary,alignItems:"center",justifyContent:"center",marginTop:2},addText:{color:"#fff",fontWeight:"900"},zone:{backgroundColor:theme.surface,borderRadius:17,padding:15,borderWidth:1,borderColor:theme.border,marginBottom:9},zoneTop:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:7},zoneName:{color:theme.text,fontSize:16,fontWeight:"900",textAlign:"right"},zoneMeta:{color:theme.muted,fontSize:11,lineHeight:19,textAlign:"right",marginTop:4},delete:{color:theme.danger,fontWeight:"800"},toggle:{color:theme.primary,fontWeight:"800"},message:{color:theme.text,textAlign:"right",fontSize:12,marginTop:12},loading:{flex:1,backgroundColor:theme.background,alignItems:"center",justifyContent:"center",gap:12},muted:{color:theme.muted,fontSize:13}});
