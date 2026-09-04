@@ -3,6 +3,7 @@ const { pool } = require("./db");
 async function main() {
   await pool.query(`
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
     CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), full_name TEXT NOT NULL, phone TEXT UNIQUE,
       secondary_phone TEXT, email TEXT UNIQUE, password_hash TEXT NOT NULL,
@@ -34,6 +35,17 @@ async function main() {
     );
     CREATE INDEX IF NOT EXISTS categories_active_order_idx ON categories(is_active,sort_order,created_at);
 
+    CREATE TABLE IF NOT EXISTS restaurant_profiles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), restaurant_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL, description TEXT, logo_url TEXT, cover_url TEXT, contact_phone TEXT,
+      address TEXT, area TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION,
+      minimum_order NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (minimum_order >= 0),
+      preparation_minutes INTEGER NOT NULL DEFAULT 30 CHECK (preparation_minutes >= 0),
+      is_open BOOLEAN NOT NULL DEFAULT true, is_featured BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS restaurant_profiles_open_idx ON restaurant_profiles(is_open,is_featured,display_name);
+
     CREATE TABLE IF NOT EXISTS menu_categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), restaurant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT true,
@@ -49,7 +61,9 @@ async function main() {
     );
     CREATE INDEX IF NOT EXISTS menu_items_restaurant_idx ON menu_items(restaurant_id,is_available,sort_order);
 
-    CREATE TABLE IF NOT EXISTS platform_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS delivery_zones (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, min_latitude DOUBLE PRECISION, max_latitude DOUBLE PRECISION,
       min_longitude DOUBLE PRECISION, max_longitude DOUBLE PRECISION, fixed_price NUMERIC(10,2), is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -58,6 +72,7 @@ async function main() {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), min_meters INTEGER NOT NULL CHECK (min_meters >= 0), max_meters INTEGER,
       price NUMERIC(10,2) NOT NULL CHECK (price >= 0), is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
     CREATE TABLE IF NOT EXISTS user_locations (
       user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, latitude DOUBLE PRECISION NOT NULL, longitude DOUBLE PRECISION NOT NULL,
       accuracy DOUBLE PRECISION, heading DOUBLE PRECISION, speed DOUBLE PRECISION, updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -68,12 +83,15 @@ async function main() {
       longitude DOUBLE PRECISION NOT NULL, accuracy DOUBLE PRECISION, heading DOUBLE PRECISION, speed DOUBLE PRECISION, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS location_history_user_time_idx ON location_history(user_id,created_at DESC);
+
     CREATE TABLE IF NOT EXISTS orders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES users(id), driver_id UUID REFERENCES users(id), restaurant_id UUID REFERENCES users(id),
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','restaurant_pending','restaurant_rejected','admin_rejected','confirmed','preparing','ready','assigned','picked_up','on_the_way','delivered','cancelled')),
       delivery_latitude DOUBLE PRECISION, delivery_longitude DOUBLE PRECISION, delivery_address TEXT, delivery_distance_meters INTEGER,
-      delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0, total_amount NUMERIC(12,2) NOT NULL DEFAULT 0, restaurant_rejection_reason TEXT,
-      admin_rejection_reason TEXT, cancelled_by UUID REFERENCES users(id), cancellation_reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0, subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+      total_amount NUMERIC(12,2) NOT NULL DEFAULT 0, payment_method TEXT NOT NULL DEFAULT 'cash', order_notes TEXT,
+      restaurant_rejection_reason TEXT, admin_rejection_reason TEXT, cancelled_by UUID REFERENCES users(id), cancellation_reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_rejection_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_rejection_reason TEXT;
@@ -81,10 +99,50 @@ async function main() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_distance_meters INTEGER;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2) NOT NULL DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash';
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_notes TEXT;
     CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS orders_driver_idx ON orders(driver_id,status,updated_at DESC);
     CREATE INDEX IF NOT EXISTS orders_dispatch_idx ON orders(driver_id,status,created_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_restaurant_idx ON orders(restaurant_id,status,updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      menu_item_id UUID REFERENCES menu_items(id) ON DELETE SET NULL, item_name TEXT NOT NULL,
+      unit_price NUMERIC(12,2) NOT NULL CHECK (unit_price >= 0), quantity INTEGER NOT NULL CHECK (quantity > 0),
+      line_total NUMERIC(12,2) NOT NULL CHECK (line_total >= 0), created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id);
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), code TEXT NOT NULL UNIQUE,
+      invited_role TEXT NOT NULL CHECK (invited_role IN ('driver','restaurant','staff')),
+      invitee_name TEXT, phone TEXT, email TEXT, restaurant_name TEXT,
+      invited_by UUID NOT NULL REFERENCES users(id), used_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','used','revoked','expired')),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '7 days'), used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS invitations_status_idx ON invitations(status,expires_at DESC);
+    CREATE INDEX IF NOT EXISTS invitations_phone_idx ON invitations(phone);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL, body TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'general', data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      read_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id,read_at,created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGSERIAL PRIMARY KEY, actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      action TEXT NOT NULL, entity_type TEXT, entity_id UUID, metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS audit_logs_entity_idx ON audit_logs(entity_type,entity_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs(actor_id,created_at DESC);
   `);
+
   const adminPhone=String(process.env.PRIMARY_ADMIN_PHONE||'').replace(/[\s-]/g,'');
   if(adminPhone) await pool.query(`UPDATE users SET role='admin',status='active',updated_at=now() WHERE phone=$1`,[adminPhone]);
   console.log('Database migration completed'); await pool.end();
