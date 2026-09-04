@@ -19,6 +19,9 @@ async function main() {
       floor TEXT,
       apartment TEXT,
       address_notes TEXT,
+      is_online BOOLEAN NOT NULL DEFAULT false,
+      is_available BOOLEAN NOT NULL DEFAULT false,
+      last_seen_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CONSTRAINT users_contact_check CHECK (phone IS NOT NULL OR email IS NOT NULL)
@@ -31,9 +34,13 @@ async function main() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS floor TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS apartment TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS address_notes TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 
     CREATE INDEX IF NOT EXISTS users_role_idx ON users(role);
     CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
+    CREATE INDEX IF NOT EXISTS drivers_availability_idx ON users(role, status, is_online, is_available);
 
     CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -52,6 +59,27 @@ async function main() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL DEFAULT '',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_zones (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      min_latitude DOUBLE PRECISION,
+      max_latitude DOUBLE PRECISION,
+      min_longitude DOUBLE PRECISION,
+      max_longitude DOUBLE PRECISION,
+      fixed_price NUMERIC(10,2),
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_distance_rates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      min_meters INTEGER NOT NULL CHECK (min_meters >= 0),
+      max_meters INTEGER,
+      price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS user_locations (
@@ -88,20 +116,30 @@ async function main() {
       delivery_latitude DOUBLE PRECISION,
       delivery_longitude DOUBLE PRECISION,
       delivery_address TEXT,
+      delivery_distance_meters INTEGER,
+      delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
       total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      restaurant_rejection_reason TEXT,
+      admin_rejection_reason TEXT,
+      cancelled_by UUID REFERENCES users(id),
+      cancellation_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS orders_driver_idx ON orders(driver_id, status, updated_at DESC);
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_rejection_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_rejection_reason TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by UUID REFERENCES users(id);
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_distance_meters INTEGER;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0;
+
+    CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_driver_idx ON orders(driver_id, status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_dispatch_idx ON orders(driver_id, status, created_at DESC);
   `);
 
-  const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\s-]/g, '');
+  const adminPhone = String(process.env.PRIMARY_ADMIN_PHONE || '').replace(/[\\s-]/g, '');
   if (adminPhone) {
     await pool.query(
       `UPDATE users SET role = 'admin', status = 'active', updated_at = now() WHERE phone = $1`,
