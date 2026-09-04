@@ -9,6 +9,7 @@ const menuRoutes = require("./routes/menu");
 const invitationRoutes = require("./routes/invitations");
 const locationRoutes = require("./routes/location");
 const orderRoutes = require("./routes/orders");
+const financeRoutes = require("./routes/finance");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -18,6 +19,7 @@ app.get("/", (_req, res) => res.json({ name: "Waselni API", status: "running" })
 app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/finance", financeRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/menu", menuRoutes);
