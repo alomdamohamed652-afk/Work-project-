@@ -13,8 +13,15 @@ function validCoordinate(value, min, max) {
 router.post("/", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
     const b = req.body || {};
-    if (!validCoordinate(b.deliveryLatitude, -90, 90) || !validCoordinate(b.deliveryLongitude, -180, 180)) {
-      return res.status(400).json({ error: "حدد موقع التوصيل على الخريطة" });
+    const hasLatitude = b.deliveryLatitude !== undefined && b.deliveryLatitude !== null && b.deliveryLatitude !== "";
+    const hasLongitude = b.deliveryLongitude !== undefined && b.deliveryLongitude !== null && b.deliveryLongitude !== "";
+    const hasCoordinates = hasLatitude && hasLongitude;
+    if (hasCoordinates && (!validCoordinate(b.deliveryLatitude, -90, 90) || !validCoordinate(b.deliveryLongitude, -180, 180))) {
+      return res.status(400).json({ error: "إحداثيات موقع التوصيل غير صحيحة" });
+    }
+    const deliveryAddress = b.deliveryAddress ? String(b.deliveryAddress).trim() : "";
+    if (!deliveryAddress && !hasCoordinates) {
+      return res.status(400).json({ error: "اكتب عنوان التوصيل أو حدد موقعك على الخريطة" });
     }
     const total = Number(b.totalAmount || 0);
     if (!Number.isFinite(total) || total < 0) return res.status(400).json({ error: "إجمالي الطلب غير صحيح" });
@@ -27,9 +34,9 @@ router.post("/", requireAuth, requireRole("customer"), async (req, res, next) =>
       [
         req.user.id,
         b.restaurantId || null,
-        Number(b.deliveryLatitude),
-        Number(b.deliveryLongitude),
-        b.deliveryAddress ? String(b.deliveryAddress).trim() : null,
+        hasCoordinates ? Number(b.deliveryLatitude) : null,
+        hasCoordinates ? Number(b.deliveryLongitude) : null,
+        deliveryAddress || null,
         total
       ]
     );
@@ -181,5 +188,3 @@ router.patch("/:id/status", requireAuth, requireRole("driver"), async (req, res,
     res.json({ order: rows[0] });
   } catch (error) { next(error); }
 });
-
-module.exports = router;
