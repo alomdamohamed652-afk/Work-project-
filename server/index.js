@@ -10,6 +10,7 @@ const invitationRoutes = require("./routes/invitations");
 const locationRoutes = require("./routes/location");
 const orderRoutes = require("./routes/orders");
 const financeRoutes = require("./routes/finance");
+const notificationRoutes = require("./routes/notifications");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -26,6 +27,7 @@ app.use("/api/menu", menuRoutes);
 app.use("/api/invitations", invitationRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
