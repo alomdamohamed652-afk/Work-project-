@@ -6,6 +6,7 @@ const healthRoutes = require("./routes/health");
 const categoryRoutes = require("./routes/categories");
 const restaurantRoutes = require("./routes/restaurants");
 const menuRoutes = require("./routes/menu");
+const invitationRoutes = require("./routes/invitations");
 const locationRoutes = require("./routes/location");
 const orderRoutes = require("./routes/orders");
 
@@ -20,6 +21,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/menu", menuRoutes);
+app.use("/api/invitations", invitationRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/orders", orderRoutes);
 
