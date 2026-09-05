@@ -14,7 +14,8 @@
     "lint": "expo lint",
     "db:migrate:delivery": "node server/migrate_delivery.js",
     "db:migrate:marketing": "node server/migrate_marketing.js",
-    "db:migrate:customer": "node server/migrate_customer.js"
+    "db:migrate:customer": "node server/migrate_customer.js",
+    "db:migrate:super-admin": "node server/migrate_super_admin.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",
