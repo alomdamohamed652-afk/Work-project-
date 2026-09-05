@@ -1,87 +1,17 @@
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-
-const API = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
-
-export default function RootLayout() {
-  useEffect(() => {
-    // Remote push notifications are not supported by Expo Go on Android.
-    // Keep the app fully usable in Expo Go and register push tokens only
-    // in a native/development build where expo-notifications is available.
-    if (Platform.OS === "web" || Platform.OS === "android" || !API) return;
-
-    let mounted = true;
-    let done = false;
-
-    const register = async () => {
-      try {
-        if (done) return;
-
-        const Notifications = await import("expo-notifications");
-        const token = await AsyncStorage.getItem("auth_token");
-        if (!token) return;
-
-        const current = await Notifications.getPermissionsAsync();
-        let status = current.status;
-
-        if (status !== "granted") {
-          if (status === "denied") return;
-          const requested = await Notifications.requestPermissionsAsync();
-          status = requested.status;
-        }
-
-        if (!mounted || status !== "granted") return;
-
-        const projectId =
-          Constants.expoConfig?.extra?.eas?.projectId ||
-          Constants.easConfig?.projectId;
-        if (!projectId) return;
-
-        const push = (
-          await Notifications.getExpoPushTokenAsync({ projectId })
-        ).data;
-        if (!push) return;
-
-        const previous = await AsyncStorage.getItem("registered_push_token");
-        if (previous === push) {
-          done = true;
-          return;
-        }
-
-        const response = await fetch(API + "/api/notifications/push-token", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ token: push, platform: Platform.OS }),
-        });
-
-        if (response.ok) {
-          await AsyncStorage.setItem("registered_push_token", push);
-          done = true;
-        }
-      } catch {
-        // Notifications are optional; never let them prevent app startup.
-      }
-    };
-
-    register();
-    const id = setInterval(register, 5000);
-
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  return (
-    <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </SafeAreaProvider>
-  );
+const API=(process.env.EXPO_PUBLIC_API_URL||"").replace(/\/$/,"");
+export default function RootLayout(){
+ useEffect(()=>{let mounted=true;let subscription:any;let responseSubscription:any;
+  const setup=async()=>{try{const Notifications=await import("expo-notifications");Notifications.setNotificationHandler({handleNotification:async()=>({shouldPlaySound:true,shouldSetBadge:true,shouldShowBanner:true,shouldShowList:true})});if(Platform.OS==="android")await Notifications.setNotificationChannelAsync("default",{name:"وصّلني",importance:Notifications.AndroidImportance.HIGH,sound:"default",vibrationPattern:[0,250,250,250],showBadge:true});
+   if(Platform.OS!=="web"&&API){const token=await AsyncStorage.getItem("auth_token");if(token){const permission=await Notifications.getPermissionsAsync();let status=permission.status;if(status!=="granted"&&status!=="denied"){const requested=await Notifications.requestPermissionsAsync();status=requested.status}if(status==="granted"){const projectId=Constants.expoConfig?.extra?.eas?.projectId||Constants.easConfig?.projectId;if(projectId){const push=(await Notifications.getExpoPushTokenAsync({projectId})).data;if(push&&mounted){const old=await AsyncStorage.getItem("registered_push_token");if(old!==push){const r=await fetch(API+"/api/customer/push-token",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({token:push,platform:Platform.OS})});if(r.ok)await AsyncStorage.setItem("registered_push_token",push)}}}}}
+   subscription=Notifications.addNotificationReceivedListener(()=>{});responseSubscription=Notifications.addNotificationResponseReceivedListener(response=>{const orderId=response.notification.request.content.data?.orderId;if(orderId)router.push({pathname:"/customer/tracking",params:{orderId:String(orderId)}})});
+  }catch{} };
+  setup();return()=>{mounted=false;subscription?.remove?.();responseSubscription?.remove?.()};
+ },[]);
+ return <SafeAreaProvider><Stack screenOptions={{headerShown:false,animation:"slide_from_right",contentStyle:{backgroundColor:"#F7F7F7"}}}/></SafeAreaProvider>;
 }
