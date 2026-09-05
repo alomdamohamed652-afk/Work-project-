@@ -1,74 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
-
-const API_URL=(process.env.EXPO_PUBLIC_API_URL||"").replace(/\/$/,"");
-const KEY="customer_cart";
-
-type Item={id:string;name:string;description?:string|null;price:number};
-type CartItem=Item&{quantity:number;restaurantId:string;restaurantName:string};
-type Cart={items:CartItem[]};
-
-export default function CustomerMenu(){
- const {restaurantId}=useLocalSearchParams<{restaurantId:string}>();
- const [restaurant,setRestaurant]=useState<any>(null);
- const [items,setItems]=useState<Item[]>([]);
- const [loading,setLoading]=useState(true);
- const [error,setError]=useState("");
- const [cartCount,setCartCount]=useState(0);
-
- const refreshCartCount=async()=>{
-  try{const raw=await AsyncStorage.getItem(KEY);const c:Cart=raw?JSON.parse(raw):{items:[]};setCartCount(c.items.reduce((n,i)=>n+i.quantity,0));}catch{}
- };
-
- useEffect(()=>{refreshCartCount();},[]);
- useEffect(()=>{
-  (async()=>{
-   try{
-    const token=await AsyncStorage.getItem("auth_token");
-    if(!token){router.replace("/auth");return;}
-    if(!restaurantId){throw new Error("المطعم غير محدد");}
-    const r=await fetch(`${API_URL}/api/menu/restaurant/${restaurantId}`,{headers:{Authorization:`Bearer ${token}`}});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error||"تعذر تحميل المنيو");
-    setRestaurant(d.restaurant);
-    setItems((d.items||[]).map((x:any)=>({id:String(x.item_id??x.id),name:String(x.name||""),description:x.description??null,price:Number(x.price)})).filter((x:Item)=>x.id&&Number.isFinite(x.price)));
-   }catch(e){setError(e instanceof Error?e.message:"تعذر تحميل المنيو");}
-   finally{setLoading(false);}
-  })();
- },[restaurantId]);
-
- const add=async(item:Item)=>{
-  try{
-   const raw=await AsyncStorage.getItem(KEY);
-   const c:Cart=raw?JSON.parse(raw):{items:[]};
-   const existing=c.items.find(i=>i.id===item.id&&i.restaurantId===String(restaurantId));
-   if(existing)existing.quantity+=1;
-   else c.items.push({...item,quantity:1,restaurantId:String(restaurantId),restaurantName:String(restaurant?.name||"المطعم")});
-   await AsyncStorage.setItem(KEY,JSON.stringify(c));
-   setCartCount(c.items.reduce((n,i)=>n+i.quantity,0));
-  }catch{setError("تعذر إضافة المنتج للسلة");}
- };
-
- return <SafeAreaView style={s.safe}>
-  <ScrollView contentContainerStyle={s.content}>
-   <View style={s.header}>
-    <Pressable onPress={()=>router.back()} style={s.back}><Text style={s.backText}>→</Text></Pressable>
-    <View style={{flex:1}}><Text style={s.title}>{restaurant?.name||"منيو المطعم"}</Text><Text style={s.sub}>{restaurant?.area||restaurant?.address||""}</Text></View>
-   </View>
-   {cartCount>0?<Pressable onPress={()=>router.push("/customer/cart")} style={s.cart}><Text style={s.cartText}>🛒 السلة ({cartCount})</Text></Pressable>:null}
-   {loading?<View style={s.center}><ActivityIndicator color={theme.primary}/><Text style={s.muted}>بنحمّل المنيو...</Text></View>:
-    error?<View style={s.center}><Text style={s.error}>{error}</Text></View>:
-    items.length===0?<View style={s.center}><Text style={s.emptyIcon}>🍽️</Text><Text style={s.emptyTitle}>المنيو لسه بتتجهز</Text><Text style={s.muted}>المطعم لم يضف منتجات متاحة حتى الآن.</Text></View>:
-    items.map(item=><View key={`${restaurantId}-${item.id}`} style={s.item}>
-     <View style={s.itemIcon}><Text style={{fontSize:25}}>🍔</Text></View>
-     <View style={s.body}><Text style={s.name}>{item.name}</Text>{item.description?<Text style={s.desc}>{item.description}</Text>:null}<Text style={s.price}>{item.price.toFixed(2)} ج.م</Text></View>
-     <Pressable onPress={()=>add(item)} style={s.add}><Text style={s.addText}>+</Text></Pressable>
-    </View>)}
-  </ScrollView>
- </SafeAreaView>;
+const API_URL=(process.env.EXPO_PUBLIC_API_URL||"").replace(/\/$/,""); const KEY="customer_cart";
+type Item={id:string;name:string;description?:string|null;price:number;image_url?:string|null}; type CartItem=Item&{quantity:number;restaurantId:string;restaurantName:string}; type Cart={items:CartItem[]};
+export default function CustomerMenu(){const {restaurantId}=useLocalSearchParams<{restaurantId:string}>();const [restaurant,setRestaurant]=useState<any>(null);const [items,setItems]=useState<Item[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState("");const [cartCount,setCartCount]=useState(0);
+ const refreshCartCount=async()=>{try{const raw=await AsyncStorage.getItem(KEY);const c:Cart=raw?JSON.parse(raw):{items:[]};setCartCount(c.items.reduce((n,i)=>n+i.quantity,0));}catch{}};
+ useEffect(()=>{refreshCartCount();},[]); useEffect(()=>{(async()=>{try{const token=await AsyncStorage.getItem("auth_token");if(!token){router.replace("/auth");return;}if(!restaurantId)throw new Error("المطعم غير محدد");const r=await fetch(`${API_URL}/api/menu/restaurant/${restaurantId}`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||"تعذر تحميل المنيو");setRestaurant(d.restaurant);setItems((d.items||[]).map((x:any)=>({id:String(x.item_id??x.id),name:String(x.name||""),description:x.description??null,price:Number(x.price),image_url:x.image_url??null})).filter((x:Item)=>x.id&&Number.isFinite(x.price)));}catch(e){setError(e instanceof Error?e.message:"تعذر تحميل المنيو");}finally{setLoading(false);}})();},[restaurantId]);
+ const add=async(item:Item)=>{try{const raw=await AsyncStorage.getItem(KEY);const c:Cart=raw?JSON.parse(raw):{items:[]};const existing=c.items.find(i=>i.id===item.id&&i.restaurantId===String(restaurantId));if(existing)existing.quantity+=1;else c.items.push({...item,quantity:1,restaurantId:String(restaurantId),restaurantName:String(restaurant?.name||"المطعم")});await AsyncStorage.setItem(KEY,JSON.stringify(c));setCartCount(c.items.reduce((n,i)=>n+i.quantity,0));}catch{setError("تعذر إضافة المنتج للسلة");}};
+ return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.content}><View style={s.header}><Pressable onPress={()=>router.back()} style={s.back}><Text style={s.backText}>→</Text></Pressable><View style={{flex:1}}>{restaurant?.logo_url?<Image source={{uri:restaurant.logo_url}} style={s.logo}/>:null}<Text style={s.title}>{restaurant?.name||"منيو المطعم"}</Text><Text style={s.sub}>{restaurant?.area||restaurant?.address||""}</Text></View></View>{restaurant?.cover_url?<Image source={{uri:restaurant.cover_url}} style={s.cover}/>:null}{cartCount>0?<Pressable onPress={()=>router.push("/customer/cart")} style={s.cart}><Text style={s.cartText}>🛒 السلة ({cartCount})</Text></Pressable>:null}{loading?<View style={s.center}><ActivityIndicator color={theme.primary}/><Text style={s.muted}>بنحمّل المنيو...</Text></View>:error?<View style={s.center}><Text style={s.error}>{error}</Text></View>:items.length===0?<View style={s.center}><Text style={s.emptyIcon}>🍽️</Text><Text style={s.emptyTitle}>المنيو لسه بتتجهز</Text><Text style={s.muted}>المطعم لم يضف منتجات متاحة حتى الآن.</Text></View>:items.map(item=><View key={`${restaurantId}-${item.id}`} style={s.item}>{item.image_url?<Image source={{uri:item.image_url}} style={s.itemImage}/>:<View style={s.itemIcon}><Text style={{fontSize:25}}>🍔</Text></View>}<View style={s.body}><Text style={s.name}>{item.name}</Text>{item.description?<Text style={s.desc}>{item.description}</Text>:null}<Text style={s.price}>{item.price.toFixed(2)} ج.م</Text></View><Pressable onPress={()=>add(item)} style={s.add}><Text style={s.addText}>+</Text></Pressable></View>)}</ScrollView></SafeAreaView>;
 }
-const s=StyleSheet.create({safe:{flex:1,backgroundColor:theme.background},content:{padding:18,paddingBottom:35},header:{flexDirection:"row-reverse",alignItems:"center",gap:12,marginBottom:12},back:{width:44,height:44,borderRadius:14,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,alignItems:"center",justifyContent:"center"},backText:{fontSize:24,color:theme.text},title:{fontSize:25,fontWeight:"900",color:theme.text,textAlign:"right"},sub:{fontSize:11,color:theme.muted,textAlign:"right",marginTop:3},cart:{backgroundColor:theme.primary,borderRadius:15,padding:13,marginBottom:14,alignItems:"center"},cartText:{color:"#fff",fontWeight:"900"},item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:18,padding:12,flexDirection:"row-reverse",alignItems:"center",gap:11,marginBottom:10},itemIcon:{width:58,height:58,borderRadius:17,backgroundColor:theme.background,alignItems:"center",justifyContent:"center"},body:{flex:1},name:{color:theme.text,fontSize:16,fontWeight:"900",textAlign:"right"},desc:{color:theme.muted,fontSize:10,textAlign:"right",marginTop:4,lineHeight:15},price:{color:theme.primary,fontSize:13,fontWeight:"900",textAlign:"right",marginTop:6},add:{width:38,height:38,borderRadius:12,backgroundColor:theme.primary,alignItems:"center",justifyContent:"center"},addText:{color:"#fff",fontSize:25,fontWeight:"700"},center:{alignItems:"center",justifyContent:"center",paddingVertical:100,gap:9},muted:{color:theme.muted,fontSize:12},error:{color:theme.danger,fontWeight:"800",textAlign:"center"},emptyIcon:{fontSize:45},emptyTitle:{color:theme.text,fontSize:18,fontWeight:"900"}});
+const s=StyleSheet.create({safe:{flex:1,backgroundColor:theme.background},content:{padding:18,paddingBottom:35},header:{flexDirection:"row-reverse",alignItems:"center",gap:12,marginBottom:12},back:{width:44,height:44,borderRadius:14,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,alignItems:"center",justifyContent:"center"},backText:{fontSize:24,color:theme.text},title:{fontSize:25,fontWeight:"900",color:theme.text,textAlign:"right"},sub:{fontSize:11,color:theme.muted,textAlign:"right",marginTop:3},logo:{width:54,height:54,borderRadius:17,marginBottom:7,alignSelf:"flex-end"},cover:{width:"100%",height:150,borderRadius:20,marginBottom:14,backgroundColor:theme.surface},cart:{backgroundColor:theme.primary,borderRadius:15,padding:13,marginBottom:14,alignItems:"center"},cartText:{color:"#fff",fontWeight:"900"},item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:18,padding:12,flexDirection:"row-reverse",alignItems:"center",gap:11,marginBottom:10},itemIcon:{width:68,height:68,borderRadius:17,backgroundColor:theme.background,alignItems:"center",justifyContent:"center"},itemImage:{width:68,height:68,borderRadius:17,backgroundColor:theme.background},body:{flex:1},name:{color:theme.text,fontSize:16,fontWeight:"900",textAlign:"right"},desc:{color:theme.muted,fontSize:10,textAlign:"right",marginTop:4,lineHeight:15},price:{color:theme.primary,fontSize:13,fontWeight:"900",textAlign:"right",marginTop:6},add:{width:38,height:38,borderRadius:12,backgroundColor:theme.primary,alignItems:"center",justifyContent:"center"},addText:{color:"#fff",fontSize:25,fontWeight:"700"},center:{alignItems:"center",justifyContent:"center",paddingVertical:100,gap:9},muted:{color:theme.muted,fontSize:12},error:{color:theme.danger,fontWeight:"800",textAlign:"center"},emptyIcon:{fontSize:45},emptyTitle:{color:theme.text,fontSize:18,fontWeight:"900"}});
