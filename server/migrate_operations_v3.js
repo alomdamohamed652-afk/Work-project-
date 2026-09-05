@@ -1,0 +1,10 @@
+const{pool}=require('./db');
+async function main(){await pool.query(`
+UPDATE membership_tiers SET promotion_orders=CASE WHEN name='الفضية' THEN 30 ELSE promotion_orders END,upgrade_orders=CASE WHEN name='الفضية' THEN 30 ELSE upgrade_orders END,retention_orders=CASE WHEN name='الذهبية' THEN 20 ELSE retention_orders END,maintenance_orders=CASE WHEN name='الذهبية' THEN 20 ELSE maintenance_orders END;
+ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS min_order_amount NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS max_discount_amount NUMERIC(12,2);ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS usage_limit INTEGER;ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS budget_amount NUMERIC(12,2);ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;ALTER TABLE reward_definitions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS reward_restaurants(reward_id UUID NOT NULL REFERENCES reward_definitions(id) ON DELETE CASCADE,restaurant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(reward_id,restaurant_id));
+CREATE TABLE IF NOT EXISTS reward_customers(reward_id UUID NOT NULL REFERENCES reward_definitions(id) ON DELETE CASCADE,customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(reward_id,customer_id));
+CREATE TABLE IF NOT EXISTS reward_usages(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),reward_id UUID REFERENCES reward_definitions(id) ON DELETE SET NULL,customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,order_id UUID REFERENCES orders(id) ON DELETE SET NULL,discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS reward_usage_customer_idx ON reward_usages(customer_id,reward_id,created_at DESC);
+`);console.log('Operations v3 migration completed')}
+module.exports=main;if(require.main===module)main().then(()=>pool.end()).catch(async e=>{console.error(e);await pool.end();process.exit(1)});
