@@ -1,9 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Location from "expo-location";
-import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
 import { fonts } from "@/constants/fonts";
@@ -29,33 +28,8 @@ export default function Onboarding() {
     }
   };
 
-  const enableNotifications = async () => {
-    try {
-      setBusy(true);
-      // Expo Go on Android does not support remote push notifications.
-      // Keep this screen safe in Expo Go and enable the full flow in a development build.
-      if (Platform.OS === "android" && Constants.appOwnership === "expo") {
-        setNotificationUnavailable(true);
-        return;
-      }
-
-      const Notifications = await import("expo-notifications");
-      if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("default", {
-          name: "وصّلني",
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: "default",
-          vibrationPattern: [0, 250, 250, 250],
-          showBadge: true,
-        });
-      }
-      const p = await Notifications.requestPermissionsAsync();
-      setNotifications(p.status === "granted");
-    } catch {
-      setNotificationUnavailable(true);
-    } finally {
-      setBusy(false);
-    }
+  const enableNotifications = () => {
+    setNotificationUnavailable(true);
   };
 
   return (
