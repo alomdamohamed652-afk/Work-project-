@@ -1,38 +1,8 @@
 const { pool } = require('./db');
-
 async function main() {
-  await pool.query(`
-    ALTER TABLE membership_tiers
-      ADD COLUMN IF NOT EXISTS promotion_orders INTEGER NOT NULL DEFAULT 0 CHECK (promotion_orders >= 0),
-      ADD COLUMN IF NOT EXISTS retention_orders INTEGER NOT NULL DEFAULT 0 CHECK (retention_orders >= 0),
-      ADD COLUMN IF NOT EXISTS reward_config JSONB NOT NULL DEFAULT '[]'::jsonb;
-
-    ALTER TABLE customer_memberships
-      ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'retention' CHECK (phase IN ('retention','promotion')),
-      ADD COLUMN IF NOT EXISTS phase_orders_count INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS last_month_tier_id UUID REFERENCES membership_tiers(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS last_month_retained BOOLEAN NOT NULL DEFAULT false;
-
-    UPDATE membership_tiers SET promotion_orders = CASE name
-      WHEN 'البرونزية' THEN 0 WHEN 'الفضية' THEN 10 WHEN 'الذهبية' THEN 30 WHEN 'الماسية' THEN 40 ELSE monthly_orders END
-      WHERE promotion_orders = 0 AND name <> 'البرونزية';
-
-    UPDATE membership_tiers SET retention_orders = CASE name
-      WHEN 'البرونزية' THEN 0 WHEN 'الفضية' THEN 10 WHEN 'الذهبية' THEN 4 WHEN 'الماسية' THEN 5 ELSE 0 END
-      WHERE retention_orders = 0;
-
-    UPDATE membership_tiers SET reward_config = CASE name
-      WHEN 'البرونزية' THEN '[{"type":"basic","label":"العروض الأساسية"}]'::jsonb
-      WHEN 'الفضية' THEN '[{"type":"delivery_percent","value":5,"label":"خصم 5% على التوصيل"}]'::jsonb
-      WHEN 'الذهبية' THEN '[{"type":"delivery_percent","value":10,"label":"خصم 10% على التوصيل"},{"type":"order_percent","value":5,"label":"خصم 5% على الطلب"}]'::jsonb
-      WHEN 'الماسية' THEN '[{"type":"delivery_percent","value":20,"label":"خصم 20% على التوصيل"},{"type":"order_percent","value":10,"label":"خصم 10% على الطلب"}]'::jsonb
-      ELSE reward_config END
-      WHERE reward_config = '[]'::jsonb;
-
-    CREATE INDEX IF NOT EXISTS customer_memberships_month_idx ON customer_memberships(month_key, tier_id);
-  `);
+  await pool.query(`ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS promotion_orders INTEGER NOT NULL DEFAULT 0 CHECK (promotion_orders>=0), ADD COLUMN IF NOT EXISTS retention_orders INTEGER NOT NULL DEFAULT 0 CHECK (retention_orders>=0), ADD COLUMN IF NOT EXISTS reward_config JSONB NOT NULL DEFAULT '[]'::jsonb; ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'retention' CHECK (phase IN ('retention','promotion')), ADD COLUMN IF NOT EXISTS phase_orders_count INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS last_month_tier_id UUID REFERENCES membership_tiers(id) ON DELETE SET NULL, ADD COLUMN IF NOT EXISTS last_month_retained BOOLEAN NOT NULL DEFAULT false; UPDATE membership_tiers SET promotion_orders=CASE name WHEN 'البرونزية' THEN 0 WHEN 'الفضية' THEN 10 WHEN 'الذهبية' THEN 30 WHEN 'الماسية' THEN 40 ELSE promotion_orders END; UPDATE membership_tiers SET retention_orders=CASE name WHEN 'البرونزية' THEN 0 WHEN 'الفضية' THEN 10 WHEN 'الذهبية' THEN 4 WHEN 'الماسية' THEN 5 ELSE retention_orders END; UPDATE membership_tiers SET upgrade_orders=CASE name WHEN 'البرونزية' THEN 10 WHEN 'الفضية' THEN 30 WHEN 'الذهبية' THEN 40 WHEN 'الماسية' THEN 0 ELSE upgrade_orders END, maintenance_orders=CASE name WHEN 'البرونزية' THEN 0 WHEN 'الفضية' THEN 10 WHEN 'الذهبية' THEN 4 WHEN 'الماسية' THEN 5 ELSE maintenance_orders END; UPDATE membership_tiers SET reward_config=CASE name WHEN 'البرونزية' THEN '[{"type":"basic","label":"العروض الأساسية"}]'::jsonb WHEN 'الفضية' THEN '[{"type":"delivery_percent","value":5,"label":"خصم 5% على التوصيل"}]'::jsonb WHEN 'الذهبية' THEN '[{"type":"delivery_percent","value":10,"label":"خصم 10% على التوصيل"},{"type":"order_percent","value":5,"label":"خصم 5% على الطلب"}]'::jsonb WHEN 'الماسية' THEN '[{"type":"delivery_percent","value":20,"label":"خصم 20% على التوصيل"},{"type":"order_percent","value":10,"label":"خصم 10% على الطلب"}]'::jsonb ELSE reward_config END WHERE reward_config='[]'::jsonb;`);
+  await pool.query(`CREATE OR REPLACE FUNCTION sync_monthly_membership(p_user UUID) RETURNS VOID LANGUAGE plpgsql AS $$ DECLARE m TEXT:=to_char(current_date,'YYYY-MM'); cm RECORD; cur RECORD; prev RECORD; BEGIN SELECT * INTO cm FROM customer_memberships WHERE user_id=p_user FOR UPDATE; IF NOT FOUND OR cm.month_key=m THEN RETURN; END IF; SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id; IF cur.id IS NULL THEN SELECT * INTO cur FROM membership_tiers WHERE is_active ORDER BY sort_order LIMIT 1; END IF; IF cur.id IS NULL THEN RETURN; END IF; IF cur.sort_order>0 AND cm.maintenance_orders_count<COALESCE(cur.maintenance_orders,0) THEN SELECT * INTO prev FROM membership_tiers WHERE is_active AND sort_order<cur.sort_order ORDER BY sort_order DESC LIMIT 1; IF prev.id IS NOT NULL THEN cur:=prev; END IF; END IF; UPDATE customer_memberships SET last_month_tier_id=cur.id,tier_id=cur.id,last_month_retained=(cur.id=cm.tier_id OR cur.sort_order=0),month_key=m,orders_count=0,maintenance_orders_count=0,upgrade_orders_count=0,phase='retention',phase_orders_count=0,month_closed=false,updated_at=now() WHERE user_id=p_user; END $$; CREATE OR REPLACE FUNCTION update_membership_on_delivery() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE cm RECORD; cur RECORD; higher RECORD; BEGIN IF NEW.status='delivered' AND COALESCE(OLD.status,'')<>'delivered' THEN PERFORM sync_monthly_membership(NEW.customer_id); SELECT * INTO cm FROM customer_memberships WHERE user_id=NEW.customer_id FOR UPDATE; SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id; IF cur.id IS NULL THEN RETURN NEW; END IF; IF cm.phase='retention' AND COALESCE(cur.maintenance_orders,0)>0 THEN UPDATE customer_memberships SET maintenance_orders_count=maintenance_orders_count+1,phase_orders_count=phase_orders_count+1,orders_count=orders_count+1,updated_at=now() WHERE user_id=NEW.customer_id; IF cm.maintenance_orders_count+1>=COALESCE(cur.maintenance_orders,0) THEN UPDATE customer_memberships SET phase='promotion',phase_orders_count=0,updated_at=now() WHERE user_id=NEW.customer_id; END IF; ELSIF cm.phase='promotion' THEN UPDATE customer_memberships SET upgrade_orders_count=upgrade_orders_count+1,phase_orders_count=phase_orders_count+1,orders_count=orders_count+1,updated_at=now() WHERE user_id=NEW.customer_id; SELECT * INTO higher FROM membership_tiers WHERE is_active AND sort_order>cur.sort_order AND upgrade_orders>0 AND upgrade_orders<=cm.upgrade_orders_count+1 ORDER BY sort_order ASC LIMIT 1; IF higher.id IS NOT NULL THEN UPDATE customer_memberships SET tier_id=higher.id,phase='retention',phase_orders_count=0,maintenance_orders_count=0,upgrade_orders_count=0,orders_count=0,updated_at=now() WHERE user_id=NEW.customer_id; END IF; ELSE UPDATE customer_memberships SET phase='promotion',orders_count=orders_count+1,phase_orders_count=phase_orders_count+1,updated_at=now() WHERE user_id=NEW.customer_id; END IF; END IF; RETURN NEW; END $$; DROP TRIGGER IF EXISTS trg_update_customer_membership ON orders; CREATE TRIGGER trg_update_customer_membership AFTER UPDATE OF status ON orders FOR EACH ROW EXECUTE FUNCTION update_membership_on_delivery();`);
   console.log('Membership v2 migration completed');
 }
-
-module.exports = main;
-if (require.main === module) main().then(() => pool.end()).catch(async e => { console.error(e); await pool.end(); process.exit(1); });
+module.exports=main;
+if(require.main===module)main().then(()=>pool.end()).catch(async e=>{console.error(e);await pool.end();process.exit(1)});
