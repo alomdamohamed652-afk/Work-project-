@@ -1,0 +1,1 @@
+import{Stack,usePathname}from'expo-router';import{View}from'react-native';import{BottomNav}from'@/components/BottomNav';export default function DriverLayout(){const path=usePathname();return <View style={{flex:1}}><Stack screenOptions={{headerShown:false,animation:'slide_from_right'}}/>{path!=='/driver'?<BottomNav role="driver"/>:null}</View>}
