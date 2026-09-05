@@ -23,13 +23,13 @@ CREATE TRIGGER trg_payment_adjustment_overpay AFTER UPDATE OF total_amount ON or
 CREATE OR REPLACE FUNCTION prevent_empty_order_items() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE active_count INTEGER;
 BEGIN
- IF TG_OP='DELETE' OR (TG_OP='UPDATE' AND NEW.availability_status IN ('removed','unavailable','replacement_pending')) THEN
+ IF TG_OP='DELETE' THEN
   SELECT COUNT(*) INTO active_count FROM order_items WHERE order_id=OLD.order_id AND id<>OLD.id AND availability_status IN ('available','replacement_selected');
   IF active_count=0 THEN RAISE EXCEPTION 'ORDER_MUST_HAVE_ACTIVE_ITEM'; END IF;
  END IF; RETURN COALESCE(NEW,OLD);
 END $$;
 DROP TRIGGER IF EXISTS trg_prevent_empty_order_items ON order_items;
-CREATE TRIGGER trg_prevent_empty_order_items BEFORE DELETE OR UPDATE OF availability_status ON order_items FOR EACH ROW EXECUTE FUNCTION prevent_empty_order_items();
+CREATE TRIGGER trg_prevent_empty_order_items BEFORE DELETE ON order_items FOR EACH ROW EXECUTE FUNCTION prevent_empty_order_items();
 CREATE OR REPLACE FUNCTION prevent_edit_unavailable_item() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP='UPDATE' AND NEW.quantity<>OLD.quantity AND OLD.availability_status NOT IN ('available','replacement_selected') THEN RAISE EXCEPTION 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'; END IF; RETURN NEW; END $$;
 DROP TRIGGER IF EXISTS trg_prevent_edit_unavailable_item ON order_items;
 CREATE TRIGGER trg_prevent_edit_unavailable_item BEFORE UPDATE OF quantity ON order_items FOR EACH ROW EXECUTE FUNCTION prevent_edit_unavailable_item();
