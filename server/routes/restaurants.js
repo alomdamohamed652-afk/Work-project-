@@ -10,15 +10,18 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
     let where = "u.role='restaurant' AND u.status='active'";
     if (q) {
       params.push(`%${q}%`);
-      where += ` AND (u.full_name ILIKE $${params.length} OR COALESCE(u.area,'') ILIKE $${params.length} OR COALESCE(u.address,'') ILIKE $${params.length})`;
+      where += ` AND (u.full_name ILIKE $${params.length} OR COALESCE(rp.display_name,'') ILIKE $${params.length} OR COALESCE(u.area,'') ILIKE $${params.length} OR COALESCE(u.address,'') ILIKE $${params.length})`;
     }
     const { rows } = await pool.query(
-      `SELECT u.id, u.full_name AS name, u.phone, u.area, u.address,
+      `SELECT u.id, COALESCE(rp.display_name,u.full_name) AS name, u.phone,
+              COALESCE(rp.area,u.area) AS area, COALESCE(rp.address,u.address) AS address,
+              rp.logo_url, rp.cover_url, rp.minimum_order, rp.is_open, rp.is_featured,
               l.latitude, l.longitude, l.updated_at AS location_updated_at
        FROM users u
+       LEFT JOIN restaurant_profiles rp ON rp.restaurant_id=u.id
        LEFT JOIN user_locations l ON l.user_id=u.id
        WHERE ${where}
-       ORDER BY u.full_name ASC
+       ORDER BY COALESCE(rp.is_featured,false) DESC, COALESCE(rp.display_name,u.full_name) ASC
        LIMIT 100`,
       params
     );
