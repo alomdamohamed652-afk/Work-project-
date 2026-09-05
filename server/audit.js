@@ -1,0 +1,7 @@
+const jwt=require('jsonwebtoken');const {pool}=require('./db');
+function auditMiddleware(req,res,next){
+ if(req.path.startsWith('/api/admin/audit'))return next();
+ const started=Date.now();const token=(req.headers.authorization||'').startsWith('Bearer ')?req.headers.authorization.slice(7):null;let actor=null;
+ try{if(token&&process.env.JWT_SECRET)actor=jwt.verify(token,process.env.JWT_SECRET)}catch{}
+ const original=res.end;res.end=function(...args){const out=original.apply(this,args);setImmediate(async()=>{try{if(!req.path.startsWith('/api'))return;let name=null,phone=null,office=null;if(actor?.sub){const {rows}=await pool.query(`SELECT u.full_name,u.phone,ep.office_id FROM users u LEFT JOIN employee_profiles ep ON ep.user_id=u.id WHERE u.id=$1`,[actor.sub]);name=rows[0]?.full_name||null;phone=rows[0]?.phone||null;office=rows[0]?.office_id||null}const module=req.path.split('/')[2]||'system';const action=`${req.method} ${req.path}`;await pool.query(`INSERT INTO audit_logs(actor_id,actor_role,office_id,action,module,method,path,entity_id,actor_name,actor_phone,ip_address,user_agent,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[actor?.sub||null,actor?.role||null,office,action,module,req.method,req.path,req.params?.id||req.body?.orderId||null,name,phone,req.ip,req.get('user-agent')||null,JSON.stringify({statusCode:res.statusCode,durationMs:Date.now()-started})])}catch(e){console.error('Audit log failed',e.message)}});return out};next()}
+module.exports={auditMiddleware};
