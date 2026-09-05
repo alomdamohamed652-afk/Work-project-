@@ -1,0 +1,1 @@
+const{pool}=require('./db');module.exports=async function(){await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_secondary_phone_unique_idx ON users(secondary_phone) WHERE secondary_phone IS NOT NULL AND secondary_phone<>'';`)};
