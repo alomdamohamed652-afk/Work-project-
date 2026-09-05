@@ -6,17 +6,229 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {theme} from '@/constants/theme';
 
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
-const statusText:any={unavailable:'غير متاح',replacement_pending:'بانتظار اختيار البديل',removed:'تم حذفه',available:'متاح',replacement_selected:'تم استبداله'};
+const statusText:any={
+  unavailable:'غير متاح',
+  replacement_pending:'بانتظار اختيار البديل',
+  removed:'تم حذفه',
+  available:'متاح',
+  replacement_selected:'تم استبداله',
+};
 
 export default function CustomerOrderItems(){
- const {orderId}=useLocalSearchParams<{orderId?:string}>();const router=useRouter();
- const [items,setItems]=useState<any[]>([]),[order,setOrder]=useState<any>(null),[replacements,setReplacements]=useState<any[]>([]),[selected,setSelected]=useState<any>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
- const load=useCallback(async()=>{if(!orderId)return;try{const token=await AsyncStorage.getItem('auth_token');const r=await fetch(API+`/api/orders/${orderId}/items`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||'تعذر تحميل الطلب');setItems(d.items||[]);setOrder(d.order);}catch(e:any){Alert.alert('تعذر التحميل',e.message||'حاول مرة أخرى');}finally{setLoading(false);}},[orderId]);
- useEffect(()=>{load();},[load]);
- const openReplacement=async(item:any)=>{try{setBusy(true);const token=await AsyncStorage.getItem('auth_token');const r=await fetch(API+`/api/orders/${orderId}/items/${item.id}/replacements`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw new Error(d.error||'تعذر تحميل البدائل');setSelected(item);setReplacements(d.items||[]);}catch(e:any){Alert.alert('تعذر تحميل البدائل',e.message||'حاول مرة أخرى');}finally{setBusy(false);}};
- const removeItem=async(item:any)=>{Alert.alert('استكمال بدون الصنف',`هل تريد استكمال الطلب بدون «${item.item_name}»؟`,[{text:'إلغاء',style:'cancel'},{text:'استكمال',style:'destructive',onPress:async()=>{try{setBusy(true);const token=await AsyncStorage.getItem('auth_token');const r=await fetch(API+`/api/orders/${orderId}/items/${item.id}/decision`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({decision:'remove'})});const d=await r.json();if(!r.ok)throw new Error(d.error||'تعذر تحديث الطلب');setOrder(d.order);await load();}catch(e:any){Alert.alert('لم يتم التحديث',e.message||'حاول مرة أخرى');}finally{setBusy(false);}}}]});};
- const replaceItem=async(next:any)=>{if(!selected)return;try{setBusy(true);const token=await AsyncStorage.getItem('auth_token');const r=await fetch(API+`/api/orders/${orderId}/items/${selected.id}/replace`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({menuItemId:next.id,quantity:selected.quantity})});const d=await r.json();if(!r.ok)throw new Error(d.error||'تعذر استبدال الصنف');setOrder(d.order);setSelected(null);setReplacements([]);await load();}catch(e:any){Alert.alert('لم يتم الاستبدال',e.message||'حاول مرة أخرى');}finally{setBusy(false);}};
- const unresolved=items.filter(x=>['unavailable','replacement_pending'].includes(x.availability_status));
- return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.page}><Pressable onPress={()=>router.back()}><Text style={s.back}>‹ رجوع</Text></Pressable><Text style={s.title}>تعديل أصناف الطلب</Text><Text style={s.subtitle}>لو المطعم أبلغ عن صنف غير متاح، اختار بديل أو كمل طلبك من غيره.</Text>{loading?<ActivityIndicator color={theme.primary}/>:<>{unresolved.length===0?<View style={s.done}><Text style={s.doneTitle}>✓ كل الأصناف محلولة</Text><Text style={s.doneText}>يمكنك العودة لمتابعة الطلب.</Text></View>:unresolved.map(item=><View key={item.id} style={s.issue}><View style={s.row}><View style={{flex:1}}><Text style={s.itemName}>{item.item_name}</Text><Text style={s.meta}>الكمية: {item.quantity} • الحالة: {statusText[item.availability_status]}</Text>{item.unavailable_reason?<Text style={s.reason}>{item.unavailable_reason}</Text>:null}</View><Text style={s.badge}>غير متاح</Text></View><View style={s.actions}><Pressable disabled={busy} onPress={()=>openReplacement(item)} style={s.primary}><Text style={s.primaryText}>استبدال الصنف</Text></Pressable><Pressable disabled={busy} onPress={()=>removeItem(item)} style={s.secondary}><Text style={s.secondaryText}>استكمال بدونه</Text></Pressable></View></View>)}{order?<View style={s.total}><Text style={s.totalLabel}>الإجمالي الحالي</Text><Text style={s.totalValue}>{Number(order.total_amount||0).toFixed(2)} ج.م</Text><Text style={s.note}>السعر يتحدث تلقائيًا بعد الاستبدال أو الحذف.</Text></View>:null}</>}<Modal visible={!!selected} animationType="slide" transparent onRequestClose={()=>setSelected(null)}><View style={s.modalBg}><View style={s.modal}><View style={s.modalHead}><Text style={s.modalTitle}>اختار البديل</Text><Pressable onPress={()=>setSelected(null)}><Text style={s.close}>إغلاق</Text></Pressable></View><ScrollView>{replacements.map(x=><Pressable key={x.id} disabled={busy} onPress={()=>replaceItem(x)} style={s.choice}><View style={{flex:1}}><Text style={s.choiceName}>{x.name}</Text>{x.description?<Text style={s.choiceDesc}>{x.description}</Text>:null}</View><Text style={s.choicePrice}>{Number(x.price).toFixed(2)} ج.م</Text></Pressable>)}{!replacements.length?<Text style={s.empty}>لا توجد أصناف متاحة حاليًا للاستبدال.</Text>:null}</ScrollView>{busy?<ActivityIndicator color={theme.primary}/>:null}</View></View></Modal></ScrollView></SafeAreaView>;
+  const {orderId}=useLocalSearchParams<{orderId?:string}>();
+  const router=useRouter();
+  const [items,setItems]=useState<any[]>([]);
+  const [order,setOrder]=useState<any>(null);
+  const [replacements,setReplacements]=useState<any[]>([]);
+  const [selected,setSelected]=useState<any>(null);
+  const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState(false);
+
+  const load=useCallback(async()=>{
+    if(!orderId)return;
+    try{
+      const token=await AsyncStorage.getItem('auth_token');
+      const r=await fetch(API+`/api/orders/${orderId}/items`,{headers:{Authorization:`Bearer ${token}`}});
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||'تعذر تحميل الطلب');
+      setItems(d.items||[]);
+      setOrder(d.order||null);
+    }catch(e:any){
+      Alert.alert('تعذر التحميل',e.message||'حاول مرة أخرى');
+    }finally{
+      setLoading(false);
+    }
+  },[orderId]);
+
+  useEffect(()=>{load();},[load]);
+
+  const openReplacement=async(item:any)=>{
+    try{
+      setBusy(true);
+      const token=await AsyncStorage.getItem('auth_token');
+      const r=await fetch(API+`/api/orders/${orderId}/items/${item.id}/replacements`,{headers:{Authorization:`Bearer ${token}`}});
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||'تعذر تحميل البدائل');
+      setSelected(item);
+      setReplacements(d.items||[]);
+    }catch(e:any){
+      Alert.alert('تعذر تحميل البدائل',e.message||'حاول مرة أخرى');
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  const removeItem=async(item:any)=>{
+    Alert.alert(
+      'استكمال بدون الصنف',
+      `هل تريد استكمال الطلب بدون «${item.item_name}»؟`,
+      [
+        {text:'إلغاء',style:'cancel'},
+        {
+          text:'استكمال',
+          style:'destructive',
+          onPress:async()=>{
+            try{
+              setBusy(true);
+              const token=await AsyncStorage.getItem('auth_token');
+              const r=await fetch(API+`/api/orders/${orderId}/items/${item.id}/decision`,{
+                method:'POST',
+                headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+                body:JSON.stringify({decision:'remove'}),
+              });
+              const d=await r.json();
+              if(!r.ok)throw new Error(d.error||'تعذر تحديث الطلب');
+              setOrder(d.order||null);
+              await load();
+            }catch(e:any){
+              Alert.alert('لم يتم التحديث',e.message||'حاول مرة أخرى');
+            }finally{
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const replaceItem=async(next:any)=>{
+    if(!selected)return;
+    try{
+      setBusy(true);
+      const token=await AsyncStorage.getItem('auth_token');
+      const r=await fetch(API+`/api/orders/${orderId}/items/${selected.id}/replace`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+        body:JSON.stringify({menuItemId:next.id,quantity:selected.quantity}),
+      });
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||'تعذر استبدال الصنف');
+      setOrder(d.order||null);
+      setSelected(null);
+      setReplacements([]);
+      await load();
+    }catch(e:any){
+      Alert.alert('لم يتم الاستبدال',e.message||'حاول مرة أخرى');
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  const unresolved=items.filter(x=>['unavailable','replacement_pending'].includes(x.availability_status));
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <ScrollView contentContainerStyle={s.page}>
+        <Pressable onPress={()=>router.back()}>
+          <Text style={s.back}>‹ رجوع</Text>
+        </Pressable>
+        <Text style={s.title}>تعديل أصناف الطلب</Text>
+        <Text style={s.subtitle}>لو المطعم أبلغ عن صنف غير متاح، اختار بديل أو كمل طلبك من غيره.</Text>
+
+        {loading ? (
+          <ActivityIndicator color={theme.primary}/>
+        ) : (
+          <View>
+            {unresolved.length===0 ? (
+              <View style={s.done}>
+                <Text style={s.doneTitle}>✓ كل الأصناف محلولة</Text>
+                <Text style={s.doneText}>يمكنك العودة لمتابعة الطلب.</Text>
+              </View>
+            ) : (
+              unresolved.map(item=>(
+                <View key={item.id} style={s.issue}>
+                  <View style={s.row}>
+                    <View style={{flex:1}}>
+                      <Text style={s.itemName}>{item.item_name}</Text>
+                      <Text style={s.meta}>الكمية: {item.quantity} • الحالة: {statusText[item.availability_status]}</Text>
+                      {item.unavailable_reason ? <Text style={s.reason}>{item.unavailable_reason}</Text> : null}
+                    </View>
+                    <Text style={s.badge}>غير متاح</Text>
+                  </View>
+                  <View style={s.actions}>
+                    <Pressable disabled={busy} onPress={()=>openReplacement(item)} style={s.primary}>
+                      <Text style={s.primaryText}>استبدال الصنف</Text>
+                    </Pressable>
+                    <Pressable disabled={busy} onPress={()=>removeItem(item)} style={s.secondary}>
+                      <Text style={s.secondaryText}>استكمال بدونه</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
+
+            {order ? (
+              <View style={s.total}>
+                <Text style={s.totalLabel}>الإجمالي الحالي</Text>
+                <Text style={s.totalValue}>{Number(order.total_amount||0).toFixed(2)} ج.م</Text>
+                <Text style={s.note}>السعر يتحدث تلقائيًا بعد الاستبدال أو الحذف.</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        <Modal visible={!!selected} animationType="slide" transparent onRequestClose={()=>setSelected(null)}>
+          <View style={s.modalBg}>
+            <View style={s.modal}>
+              <View style={s.modalHead}>
+                <Text style={s.modalTitle}>اختار البديل</Text>
+                <Pressable onPress={()=>setSelected(null)}>
+                  <Text style={s.close}>إغلاق</Text>
+                </Pressable>
+              </View>
+              <ScrollView>
+                {replacements.map(x=>(
+                  <Pressable key={x.id} disabled={busy} onPress={()=>replaceItem(x)} style={s.choice}>
+                    <View style={{flex:1}}>
+                      <Text style={s.choiceName}>{x.name}</Text>
+                      {x.description ? <Text style={s.choiceDesc}>{x.description}</Text> : null}
+                    </View>
+                    <Text style={s.choicePrice}>{Number(x.price).toFixed(2)} ج.م</Text>
+                  </Pressable>
+                ))}
+                {!replacements.length ? <Text style={s.empty}>لا توجد أصناف متاحة حاليًا للاستبدال.</Text> : null}
+              </ScrollView>
+              {busy ? <ActivityIndicator color={theme.primary}/> : null}
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
-const s=StyleSheet.create({safe:{flex:1,backgroundColor:theme.background},page:{padding:20,paddingBottom:40},back:{color:theme.primary,fontWeight:'800',fontSize:15,textAlign:'right',marginBottom:8},title:{fontSize:27,fontWeight:'900',color:theme.text,textAlign:'right'},subtitle:{fontSize:12,color:theme.muted,textAlign:'right',lineHeight:20,marginTop:7,marginBottom:16},issue:{backgroundColor:theme.surface,borderWidth:1,borderColor:'#e05555',borderRadius:18,padding:15,marginBottom:12},row:{flexDirection:'row-reverse',gap:10,alignItems:'flex-start'},itemName:{fontSize:16,fontWeight:'900',color:theme.text,textAlign:'right'},meta:{fontSize:11,color:theme.muted,textAlign:'right',marginTop:5},reason:{fontSize:11,color:'#e05555',textAlign:'right',marginTop:7},badge:{backgroundColor:'#e0555520',color:'#e05555',fontSize:10,fontWeight:'900',paddingHorizontal:9,paddingVertical:6,borderRadius:10},actions:{flexDirection:'row-reverse',gap:8,marginTop:14},primary:{flex:1,backgroundColor:theme.primary,borderRadius:12,paddingVertical:12,alignItems:'center'},primaryText:{color:'#fff',fontWeight:'900'},secondary:{flex:1,borderWidth:1,borderColor:theme.border,borderRadius:12,paddingVertical:12,alignItems:'center'},secondaryText:{color:theme.text,fontWeight:'800'},done:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:18,padding:20,alignItems:'center'},doneTitle:{color:theme.primary,fontWeight:'900',fontSize:17},doneText:{color:theme.muted,marginTop:6},total:{marginTop:8,backgroundColor:theme.surface,borderRadius:16,padding:15},totalLabel:{color:theme.muted,textAlign:'right',fontSize:11},totalValue:{color:theme.text,textAlign:'right',fontSize:20,fontWeight:'900',marginTop:4},note:{color:theme.muted,textAlign:'right',fontSize:10,marginTop:5},modalBg:{flex:1,backgroundColor:'#0008',justifyContent:'flex-end'},modal:{maxHeight:'80%',backgroundColor:theme.background,borderTopLeftRadius:24,borderTopRightRadius:24,padding:18},modalHead:{flexDirection:'row-reverse',justifyContent:'space-between',alignItems:'center',marginBottom:10},modalTitle:{fontSize:21,fontWeight:'900',color:theme.text},close:{color:theme.primary,fontWeight:'800'},choice:{flexDirection:'row-reverse',alignItems:'center',gap:12,paddingVertical:14,borderBottomWidth:1,borderBottomColor:theme.border},choiceName:{color:theme.text,fontWeight:'900',fontSize:15,textAlign:'right'},choiceDesc:{color:theme.muted,fontSize:10,textAlign:'right',marginTop:3},choicePrice:{color:theme.primary,fontWeight:'900'},empty:{color:theme.muted,textAlign:'center',padding:30}});
+
+const s=StyleSheet.create({
+  safe:{flex:1,backgroundColor:theme.background},
+  page:{padding:20,paddingBottom:40},
+  back:{color:theme.primary,fontWeight:'800',fontSize:15,textAlign:'right',marginBottom:8},
+  title:{fontSize:27,fontWeight:'900',color:theme.text,textAlign:'right'},
+  subtitle:{fontSize:12,color:theme.muted,textAlign:'right',lineHeight:20,marginTop:7,marginBottom:16},
+  issue:{backgroundColor:theme.surface,borderWidth:1,borderColor:'#e05555',borderRadius:18,padding:15,marginBottom:12},
+  row:{flexDirection:'row-reverse',gap:10,alignItems:'flex-start'},
+  itemName:{fontSize:16,fontWeight:'900',color:theme.text,textAlign:'right'},
+  meta:{fontSize:11,color:theme.muted,textAlign:'right',marginTop:5},
+  reason:{fontSize:11,color:'#e05555',textAlign:'right',marginTop:7},
+  badge:{backgroundColor:'#e0555520',color:'#e05555',fontSize:10,fontWeight:'900',paddingHorizontal:9,paddingVertical:6,borderRadius:10},
+  actions:{flexDirection:'row-reverse',gap:8,marginTop:14},
+  primary:{flex:1,backgroundColor:theme.primary,borderRadius:12,paddingVertical:12,alignItems:'center'},
+  primaryText:{color:'#fff',fontWeight:'900'},
+  secondary:{flex:1,borderWidth:1,borderColor:theme.border,borderRadius:12,paddingVertical:12,alignItems:'center'},
+  secondaryText:{color:theme.text,fontWeight:'800'},
+  done:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:18,padding:20,alignItems:'center'},
+  doneTitle:{color:theme.primary,fontWeight:'900',fontSize:17},
+  doneText:{color:theme.muted,marginTop:6},
+  total:{marginTop:8,backgroundColor:theme.surface,borderRadius:16,padding:15},
+  totalLabel:{color:theme.muted,textAlign:'right',fontSize:11},
+  totalValue:{color:theme.text,textAlign:'right',fontSize:20,fontWeight:'900',marginTop:4},
+  note:{color:theme.muted,textAlign:'right',fontSize:10,marginTop:5},
+  modalBg:{flex:1,backgroundColor:'#0008',justifyContent:'flex-end'},
+  modal:{maxHeight:'80%',backgroundColor:theme.background,borderTopLeftRadius:24,borderTopRightRadius:24,padding:18},
+  modalHead:{flexDirection:'row-reverse',justifyContent:'space-between',alignItems:'center',marginBottom:10},
+  modalTitle:{fontSize:21,fontWeight:'900',color:theme.text},
+  close:{color:theme.primary,fontWeight:'800'},
+  choice:{flexDirection:'row-reverse',alignItems:'center',gap:12,paddingVertical:14,borderBottomWidth:1,borderBottomColor:theme.border},
+  choiceName:{color:theme.text,fontWeight:'900',fontSize:15,textAlign:'right'},
+  choiceDesc:{color:theme.muted,fontSize:10,textAlign:'right',marginTop:3},
+  choicePrice:{color:theme.primary,fontWeight:'900'},
+  empty:{color:theme.muted,textAlign:'center',padding:30},
+});
