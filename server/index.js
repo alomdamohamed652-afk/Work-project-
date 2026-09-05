@@ -12,6 +12,7 @@ const orderRoutes = require("./routes/orders");
 const financeRoutes = require("./routes/finance");
 const notificationRoutes = require("./routes/notifications");
 const couponRoutes = require("./routes/coupons");
+const customerRoutes = require("./routes/customer");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -30,6 +31,7 @@ app.use("/api/location", locationRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin/coupons", couponRoutes);
+app.use("/api/customer", customerRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
