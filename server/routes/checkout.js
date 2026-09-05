@@ -1,6 +1,639 @@
-const express=require("express");const router=express.Router();const {pool}=require("../db");const {requireAuth,requireRole}=require("../auth");const {notifyUser,notifyRole}=require("../push");function money(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100)/100:0}function coord(v,min,max){const n=Number(v);return Number.isFinite(n)&&n>=min&&n<=max}function distanceMeters(a,b,c,d){const R=6371000,toRad=x=>x*Math.PI/180,p1=toRad(a),p2=toRad(c),dp=toRad(c-a),dl=toRad(d-b);const z=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return Math.round(2*R*Math.atan2(Math.sqrt(z),Math.sqrt(1-z)))}async function settings(client){const{rows}=await client.query(`SELECT key,value FROM platform_settings WHERE key LIKE 'delivery.%'`);return Object.fromEntries(rows.map(x=>[x.key,x.value]))}async function findZone(client,lat,lon){const{rows}=await client.query(`SELECT * FROM delivery_zones WHERE is_active=true AND center_latitude IS NOT NULL AND center_longitude IS NOT NULL AND radius_meters IS NOT NULL ORDER BY radius_meters ASC`);for(const z of rows)if(distanceMeters(Number(z.center_latitude),Number(z.center_longitude),lat,lon)<=Number(z.radius_meters))return z;const legacy=await client.query(`SELECT * FROM delivery_zones WHERE is_active=true AND center_latitude IS NULL AND min_latitude IS NOT NULL AND max_latitude IS NOT NULL AND min_longitude IS NOT NULL AND max_longitude IS NOT NULL AND $1 BETWEEN min_latitude AND max_latitude AND $2 BETWEEN min_longitude AND max_longitude ORDER BY fixed_price NULLS LAST LIMIT 1`,[lat,lon]);return legacy.rows[0]||null}async function deliveryFee(client,restaurantIds,lat,lon){if(lat==null||lon==null)return{fee:0,distance:null};const s=await settings(client);const maxMerchants=Number(s["delivery.max_merchants"]||0);if(maxMerchants>0&&restaurantIds.length>maxMerchants)throw Object.assign(new Error(`لا يمكن الطلب من أكثر من ${maxMerchants} جهات في نفس الطلب`),{status:400});const zone=await findZone(client,lat,lon),base=money(zone?.base_fee??zone?.fixed_price??s["delivery.base_fee"]??0),included=Math.max(0,Number(zone?.included_km??s["delivery.included_km"]??0)),extra=Math.max(0,Number(zone?.extra_km_fee??s["delivery.extra_km_fee"]??0)),merchant=Math.max(0,Number(zone?.extra_merchant_fee??s["delivery.extra_merchant_fee"]??0)),{rows}=await client.query(`SELECT restaurant_id,latitude,longitude FROM restaurant_profiles WHERE restaurant_id=ANY($1::uuid[])`,[restaurantIds]),map=new Map(rows.map(x=>[String(x.restaurant_id),x])),ds=restaurantIds.map(id=>{const p=map.get(String(id));return p?.latitude!=null&&p?.longitude!=null?distanceMeters(Number(p.latitude),Number(p.longitude),lat,lon):null}).filter(x=>x!=null),distance=ds.length?Math.max(...ds):null,maxDistance=Number(s["delivery.max_distance_km"]||0);if(maxDistance>0&&distance!=null&&distance/1000>maxDistance)throw Object.assign(new Error(`المسافة خارج نطاق التوصيل (${maxDistance} كم)`),{status:400});const km=distance==null?0:distance/1000,extraKm=Math.max(0,Math.ceil(Math.max(0,km-included))),fee=money(base+extraKm*extra+Math.max(0,restaurantIds.length-1)*merchant);return{fee,distance}}async function normalize(client,groups){if(!Array.isArray(groups)||!groups.length)throw Object.assign(new Error("السلة فارغة"),{status:400});const seen=new Set(),out=[];for(const g of groups){const rid=String(g?.restaurantId||"");if(!rid||seen.has(rid))throw Object.assign(new Error("بيانات الجهات غير صحيحة"),{status:400});seen.add(rid);const items=Array.isArray(g.items)?g.items:[];if(!items.length)throw Object.assign(new Error("إحدى الجهات لا تحتوي منتجات"),{status:400});const ids=items.map(i=>String(i.menuItemId||"")),{rows:menu}=await client.query(`SELECT id,name,price FROM menu_items WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND is_available=true`,[ids,rid]);if(menu.length!==new Set(ids).size)throw Object.assign(new Error("بعض المنتجات لم تعد متاحة"),{status:400});const map=new Map(menu.map(x=>[String(x.id),x]));let subtotal=0;const normalized=[];for(const raw of items){const item=map.get(String(raw.menuItemId)),q=Math.floor(Number(raw.quantity));if(!item||!Number.isFinite(q)||q<1||q>50)throw Object.assign(new Error("بيانات السلة غير صحيحة"),{status:400});const unit=money(item.price),line=money(unit*q);subtotal+=line;normalized.push({item,q,unit,line})}out.push({restaurantId:rid,subtotal:money(subtotal),items:normalized})}return out}
-function paymentParts(body,total){const method=String(body.paymentMethod||"cash"),allowed=["cash","wallet","vodafone_cash","instapay"];if(method!=="split"){if(!allowed.includes(method))throw Object.assign(new Error("طريقة الدفع غير مدعومة"),{status:400});const p={method,amount:total,reference:null,receiptBase64:null,receiptMime:null};if(Array.isArray(body.payments)&&body.payments[0])Object.assign(p,{reference:body.payments[0].reference||null,receiptBase64:body.payments[0].receiptBase64||null,receiptMime:body.payments[0].receiptMime||null});if((method==='vodafone_cash'||method==='instapay')&&!p.receiptBase64)throw Object.assign(new Error("صورة التحويل مطلوبة"),{status:400});return[p]}if(!Array.isArray(body.payments)||body.payments.length<2)throw Object.assign(new Error("حدد طريقتي دفع على الأقل"),{status:400});const parts=body.payments.map(p=>({method:String(p.method||""),amount:money(p.amount),reference:p.reference?String(p.reference).trim():null,receiptBase64:p.receiptBase64||null,receiptMime:p.receiptMime||null}));if(parts.some(p=>!allowed.includes(p.method)||p.amount<=0))throw Object.assign(new Error("طريقة أو قيمة دفع غير صحيحة"),{status:400});if(Math.abs(parts.reduce((s,p)=>s+p.amount,0)-total)>0.01)throw Object.assign(new Error("إجمالي وسائل الدفع يجب أن يساوي إجمالي الطلب"),{status:400});if(parts.some(p=>(p.method==='vodafone_cash'||p.method==='instapay')&&!p.receiptBase64))throw Object.assign(new Error("صورة التحويل مطلوبة لكل تحويل إلكتروني"),{status:400});return parts}
-async function applyWallet(client,userId,amount,referenceId){if(amount<=0)return;const{rows}=await client.query(`SELECT balance FROM customer_wallets WHERE user_id=$1 FOR UPDATE`,[userId]);if(!rows[0]||Number(rows[0].balance)<amount)throw Object.assign(new Error("رصيد المحفظة غير كافٍ"),{status:400});const after=money(Number(rows[0].balance)-amount);await client.query(`UPDATE customer_wallets SET balance=$1,updated_at=now() WHERE user_id=$2`,[after,userId]);await client.query(`INSERT INTO wallet_transactions(user_id,type,amount,balance_after,reference_type,reference_id,note) VALUES($1,'debit',$2,$3,'checkout',$4,'دفع من المحفظة')`,[userId,amount,after,referenceId])}
-async function couponDiscount(client,userId,code,subtotal){if(!code)return{id:null,code:null,discount:0};const{rows}=await client.query(`SELECT * FROM coupons WHERE code=$1 AND is_active=true FOR UPDATE`,[String(code).trim().toUpperCase()]);const c=rows[0],now=new Date();if(!c)throw Object.assign(new Error("الكوبون غير موجود أو غير فعال"),{status:400});if(new Date(c.starts_at)>now||(c.expires_at&&new Date(c.expires_at)<now))throw Object.assign(new Error("الكوبون غير صالح حاليًا"),{status:400});if(Number(c.usage_limit||0)>0&&Number(c.used_count)>=Number(c.usage_limit))throw Object.assign(new Error("انتهى استخدام الكوبون"),{status:400});if(subtotal<Number(c.min_order_amount||0))throw Object.assign(new Error(`الحد الأدنى للكوبون ${Number(c.min_order_amount).toFixed(2)} ج.م`),{status:400});const used=await client.query(`SELECT 1 FROM coupon_usages WHERE coupon_id=$1 AND user_id=$2 LIMIT 1`,[c.id,userId]);if(used.rows[0])throw Object.assign(new Error("استخدمت هذا الكوبون من قبل"),{status:400});let discount=c.discount_type==='percentage'?subtotal*Number(c.discount_value)/100:Number(c.discount_value);if(c.max_discount!=null)discount=Math.min(discount,Number(c.max_discount));return{id:c.id,code:c.code,discount:money(Math.min(discount,subtotal))}}
-async function notifyRestaurants(orders){for(const o of orders)await notifyUser(o.restaurant_id,"طلب جديد","لديك طلب جديد يحتاج للمراجعة","order",{orderId:o.id,checkoutId:o.checkout_id})}
-router.post("/bulk",requireAuth,requireRole("customer"),async(req,res,next)=>{const b=req.body||{},key=String(b.idempotencyKey||"").trim();if(!key||key.length>100)return res.status(400).json({error:"مفتاح العملية مطلوب"});const address=b.deliveryAddress?String(b.deliveryAddress).trim():"",hasLat=b.deliveryLatitude!==undefined&&b.deliveryLatitude!==null&&b.deliveryLatitude!=="",hasLon=b.deliveryLongitude!==undefined&&b.deliveryLongitude!==null&&b.deliveryLongitude!=="";if(!address&&!hasLat&&!hasLon)return res.status(400).json({error:"اكتب العنوان أو حدد الموقع"});if(hasLat!==hasLon||(hasLat&&(!coord(b.deliveryLatitude,-90,90)||!coord(b.deliveryLongitude,-180,180))))return res.status(400).json({error:"إحداثيات الموقع غير صحيحة"});const client=await pool.connect();try{await client.query("BEGIN");const existing=await client.query(`SELECT * FROM checkout_sessions WHERE customer_id=$1 AND idempotency_key=$2 FOR UPDATE`,[req.user.id,key]);if(existing.rows[0]){const os=await client.query(`SELECT * FROM orders WHERE checkout_id=$1 ORDER BY created_at`,[existing.rows[0].id]);await client.query("COMMIT");return res.status(200).json({checkout:existing.rows[0],orders:os.rows,idempotent:true})}const groups=await normalize(client,b.orders),lat=hasLat?Number(b.deliveryLatitude):null,lon=hasLon?Number(b.deliveryLongitude):null,d=await deliveryFee(client,groups.map(x=>x.restaurantId),lat,lon),subtotal=money(groups.reduce((s,g)=>s+g.subtotal,0)),coupon=await couponDiscount(client,req.user.id,b.couponCode,subtotal),discount=coupon.discount,total=money(Math.max(0,subtotal+d.fee-discount)),parts=paymentParts(b,total);let walletAmount=0,cashDue=0;for(const p of parts){if(p.method==='wallet')walletAmount+=p.amount;if(p.method==='cash')cashDue+=p.amount}const pendingTransfer=parts.some(p=>p.method==='vodafone_cash'||p.method==='instapay'),paidNow=money(walletAmount),paymentStatus=pendingTransfer?'pending':paidNow>=total-0.01?'paid':paidNow>0?'partially_paid':'cash_due';const{rows:[checkout]}=await client.query(`INSERT INTO checkout_sessions(customer_id,delivery_latitude,delivery_longitude,delivery_address,restaurants_count,subtotal,delivery_fee,total_amount,payment_method,order_notes,idempotency_key,coupon_id,coupon_code,discount_amount,admin_fee,payment_status,paid_amount,cash_due) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,0,$15,$16,$17) RETURNING *`,[req.user.id,lat,lon,address||null,groups.length,subtotal,d.fee,total,String(b.paymentMethod||'cash'),b.orderNotes?String(b.orderNotes).trim():null,key,coupon.id,coupon.code,discount,paymentStatus,paidNow,cashDue]);if(walletAmount>0)await applyWallet(client,req.user.id,walletAmount,checkout.id);const orders=[];for(let idx=0;idx<groups.length;idx++){const g=groups[idx],share=idx===0?d.fee:0,groupDiscount=subtotal?money(discount*(g.subtotal/subtotal)):0,orderTotal=money(Math.max(0,g.subtotal+share-groupDiscount));const{rows:[order]}=await client.query(`INSERT INTO orders(customer_id,restaurant_id,checkout_id,status,delivery_latitude,delivery_longitude,delivery_address,delivery_distance_meters,delivery_fee,total_amount,subtotal,payment_method,order_notes,coupon_code,discount_amount,admin_fee,payment_status,paid_amount,cash_due) VALUES($1,$2,$3,'restaurant_pending',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,0,$16,0,0) RETURNING *`,[req.user.id,g.restaurantId,checkout.id,lat,lon,address||null,d.distance,share,orderTotal,g.subtotal,String(b.paymentMethod||'cash'),b.orderNotes?String(b.orderNotes).trim():null,coupon.code,groupDiscount,share,paymentStatus]);for(const x of g.items)await client.query(`INSERT INTO order_items(order_id,menu_item_id,item_name,unit_price,quantity,line_total) VALUES($1,$2,$3,$4,$5,$6)`,[order.id,x.item.id,x.item.name,x.unit,x.q,x.line]);orders.push(order)}let remaining=total;for(let i=0;i<orders.length;i++){const o=orders[i],share=i===orders.length-1?remaining:money(total*(Number(o.total_amount)/Math.max(total,1))),paidShare=money(Math.min(share,paidNow*(Number(o.total_amount)/Math.max(total,1)))),cashShare=money(Math.min(share-paidShare,cashDue*(Number(o.total_amount)/Math.max(total,1))));await client.query(`UPDATE orders SET paid_amount=$1,cash_due=$2 WHERE id=$3`,[paidShare,cashShare,o.id]);remaining=money(remaining-share)}if(coupon.id){await client.query(`INSERT INTO coupon_usages(coupon_id,user_id,checkout_id,discount_amount) VALUES($1,$2,$3,$4)`,[coupon.id,req.user.id,checkout.id,discount]);await client.query(`UPDATE coupons SET used_count=used_count+1,updated_at=now() WHERE id=$1`,[coupon.id])}for(const p of parts)await client.query(`INSERT INTO order_payments(checkout_id,customer_id,method,amount,status,receipt_base64,receipt_mime,transaction_reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[checkout.id,req.user.id,p.method,p.amount,p.method==='cash'||p.method==='wallet'?'verified': 'pending',p.receiptBase64,p.receiptMime,p.reference]);await client.query("COMMIT");if(!pendingTransfer)await notifyRestaurants(orders);await notifyRole("admin","طلب جديد","تم إنشاء طلب جديد.","order",{checkoutId:checkout.id,paymentStatus});res.status(201).json({checkout,orders,paymentStatus,paymentPending:pendingTransfer})}catch(e){try{await client.query("ROLLBACK")}catch{}if(e.code==='23505'&&key){try{const{rows}=await pool.query(`SELECT * FROM checkout_sessions WHERE customer_id=$1 AND idempotency_key=$2`,[req.user.id,key]);if(rows[0])return res.status(200).json({checkout:rows[0],idempotent:true})}catch{}}if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{client.release()}});module.exports=router;
+const express = require("express");
+const router = express.Router();
+const { pool } = require("../db");
+const { requireAuth, requireRole } = require("../auth");
+const { notifyUser, notifyRole } = require("../push");
+
+function money(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+function coord(v, min, max) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= min && n <= max;
+}
+
+function distanceMeters(a, b, c, d) {
+  const R = 6371000,
+    toRad = (x) => (x * Math.PI) / 180,
+    p1 = toRad(a),
+    p2 = toRad(c),
+    dp = toRad(c - a),
+    dl = toRad(d - b);
+  const z =
+    Math.sin(dp / 2) ** 2 +
+    Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return Math.round(2 * R * Math.atan2(Math.sqrt(z), Math.sqrt(1 - z)));
+}
+
+async function settings(client) {
+  const { rows } = await client.query(
+    `SELECT key,value FROM platform_settings WHERE key LIKE 'delivery.%'`
+  );
+  return Object.fromEntries(rows.map((x) => [x.key, x.value]));
+}
+
+async function findZone(client, lat, lon) {
+  const { rows } = await client.query(
+    `SELECT * FROM delivery_zones WHERE is_active=true AND center_latitude IS NOT NULL AND center_longitude IS NOT NULL AND radius_meters IS NOT NULL ORDER BY radius_meters ASC`
+  );
+  for (const z of rows)
+    if (
+      distanceMeters(
+        Number(z.center_latitude),
+        Number(z.center_longitude),
+        lat,
+        lon
+      ) <= Number(z.radius_meters)
+    )
+      return z;
+
+  const legacy = await client.query(
+    `SELECT * FROM delivery_zones WHERE is_active=true AND center_latitude IS NULL AND min_latitude IS NOT NULL AND max_latitude IS NOT NULL AND min_longitude IS NOT NULL AND max_longitude IS NOT NULL AND $1 BETWEEN min_latitude AND max_latitude AND $2 BETWEEN min_longitude AND max_longitude ORDER BY fixed_price NULLS LAST LIMIT 1`,
+    [lat, lon]
+  );
+  return legacy.rows[0] || null;
+}
+
+// ✅ FIXED: delivery_fee is TOTAL for all restaurants, not per-restaurant
+// First restaurant gets the FULL delivery_fee in their order
+// Subsequent restaurants get 0 (no double-counting)
+async function deliveryFee(client, restaurantIds, lat, lon) {
+  if (lat == null || lon == null) return { fee: 0, distance: null };
+
+  const s = await settings(client);
+  const maxMerchants = Number(s["delivery.max_merchants"] || 0);
+  if (maxMerchants > 0 && restaurantIds.length > maxMerchants)
+    throw Object.assign(
+      new Error(
+        `لا يمكن الطلب من أكثر من ${maxMerchants} جهات في نفس الطلب`
+      ),
+      { status: 400 }
+    );
+
+  const zone = await findZone(client, lat, lon),
+    base = money(
+      zone?.base_fee ?? zone?.fixed_price ?? s["delivery.base_fee"] ?? 0
+    ),
+    included = Math.max(0, Number(zone?.included_km ?? s["delivery.included_km"] ?? 0)),
+    extra = Math.max(0, Number(zone?.extra_km_fee ?? s["delivery.extra_km_fee"] ?? 0)),
+    merchant = Math.max(
+      0,
+      Number(zone?.extra_merchant_fee ?? s["delivery.extra_merchant_fee"] ?? 0)
+    ),
+    { rows } = await client.query(
+      `SELECT restaurant_id,latitude,longitude FROM restaurant_profiles WHERE restaurant_id=ANY($1::uuid[])`,
+      [restaurantIds]
+    ),
+    map = new Map(rows.map((x) => [String(x.restaurant_id), x])),
+    ds = restaurantIds
+      .map((id) => {
+        const p = map.get(String(id));
+        return p?.latitude != null && p?.longitude != null
+          ? distanceMeters(
+              Number(p.latitude),
+              Number(p.longitude),
+              lat,
+              lon
+            )
+          : null;
+      })
+      .filter((x) => x != null),
+    distance = ds.length ? Math.max(...ds) : null,
+    maxDistance = Number(s["delivery.max_distance_km"] || 0);
+
+  if (
+    maxDistance > 0 &&
+    distance != null &&
+    distance / 1000 > maxDistance
+  )
+    throw Object.assign(
+      new Error(`المسافة خارج نطاق التوصيل (${maxDistance} كم)`),
+      { status: 400 }
+    );
+
+  const km = distance == null ? 0 : distance / 1000,
+    extraKm = Math.max(0, Math.ceil(Math.max(0, km - included))),
+    // ✅ FIXED: Fee is TOTAL for all restaurants combined
+    // First restaurant pays full fee, others pay 0
+    fee = money(base + extraKm * extra + Math.max(0, restaurantIds.length - 1) * merchant);
+
+  return { fee, distance };
+}
+
+async function normalize(client, groups) {
+  if (!Array.isArray(groups) || !groups.length)
+    throw Object.assign(new Error("السلة فارغة"), { status: 400 });
+
+  const seen = new Set(),
+    out = [];
+  for (const g of groups) {
+    const rid = String(g?.restaurantId || "");
+    if (!rid || seen.has(rid))
+      throw Object.assign(
+        new Error("بيانات الجهات غير صحيحة"),
+        { status: 400 }
+      );
+    seen.add(rid);
+
+    const items = Array.isArray(g.items) ? g.items : [];
+    if (!items.length)
+      throw Object.assign(
+        new Error("إحدى الجهات لا تحتوي منتجات"),
+        { status: 400 }
+      );
+
+    const ids = items.map((i) => String(i.menuItemId || "")),
+      { rows: menu } = await client.query(
+        `SELECT id,name,price FROM menu_items WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND is_available=true`,
+        [ids, rid]
+      );
+
+    if (menu.length !== new Set(ids).size)
+      throw Object.assign(
+        new Error("بعض المنتجات لم تعد متاحة"),
+        { status: 400 }
+      );
+
+    const map = new Map(menu.map((x) => [String(x.id), x]));
+    let subtotal = 0;
+    const normalized = [];
+
+    for (const raw of items) {
+      const item = map.get(String(raw.menuItemId)),
+        q = Math.floor(Number(raw.quantity));
+
+      if (
+        !item ||
+        !Number.isFinite(q) ||
+        q < 1 ||
+        q > 50
+      )
+        throw Object.assign(
+          new Error("بيانات السلة غير صحيحة"),
+          { status: 400 }
+        );
+
+      const unit = money(item.price),
+        line = money(unit * q);
+      subtotal += line;
+      normalized.push({ item, q, unit, line });
+    }
+
+    out.push({
+      restaurantId: rid,
+      subtotal: money(subtotal),
+      items: normalized,
+    });
+  }
+
+  return out;
+}
+
+function paymentParts(body, total) {
+  const method = String(body.paymentMethod || "cash"),
+    allowed = ["cash", "wallet", "vodafone_cash", "instapay"];
+
+  if (method !== "split") {
+    if (!allowed.includes(method))
+      throw Object.assign(new Error("طريقة الدفع غير مدعومة"), { status: 400 });
+
+    const p = {
+      method,
+      amount: total,
+      reference: null,
+      receiptBase64: null,
+      receiptMime: null,
+    };
+
+    if (Array.isArray(body.payments) && body.payments[0])
+      Object.assign(p, {
+        reference: body.payments[0].reference || null,
+        receiptBase64: body.payments[0].receiptBase64 || null,
+        receiptMime: body.payments[0].receiptMime || null,
+      });
+
+    if (
+      (method === "vodafone_cash" || method === "instapay") &&
+      !p.receiptBase64
+    )
+      throw Object.assign(new Error("صورة التحويل مطلوبة"), { status: 400 });
+
+    return [p];
+  }
+
+  if (!Array.isArray(body.payments) || body.payments.length < 2)
+    throw Object.assign(
+      new Error("حدد طريقتي دفع على الأقل"),
+      { status: 400 }
+    );
+
+  const parts = body.payments.map((p) => ({
+    method: String(p.method || ""),
+    amount: money(p.amount),
+    reference: p.reference ? String(p.reference).trim() : null,
+    receiptBase64: p.receiptBase64 || null,
+    receiptMime: p.receiptMime || null,
+  }));
+
+  if (
+    parts.some(
+      (p) =>
+        !allowed.includes(p.method) ||
+        p.amount <= 0
+    )
+  )
+    throw Object.assign(
+      new Error("طريقة أو قيمة دفع غير صحيحة"),
+      { status: 400 }
+    );
+
+  if (Math.abs(parts.reduce((s, p) => s + p.amount, 0) - total) > 0.01)
+    throw Object.assign(
+      new Error("إجمالي وسائل الدفع يجب أن يساوي إجمالي الطلب"),
+      { status: 400 }
+    );
+
+  if (
+    parts.some(
+      (p) =>
+        (p.method === "vodafone_cash" || p.method === "instapay") &&
+        !p.receiptBase64
+    )
+  )
+    throw Object.assign(
+      new Error("صورة التحويل مطلوبة لكل تحويل إلكتروني"),
+      { status: 400 }
+    );
+
+  return parts;
+}
+
+async function applyWallet(client, userId, amount, referenceId) {
+  if (amount <= 0) return;
+
+  const { rows } = await client.query(
+    `SELECT balance FROM customer_wallets WHERE user_id=$1 FOR UPDATE`,
+    [userId]
+  );
+
+  if (!rows[0] || Number(rows[0].balance) < amount)
+    throw Object.assign(
+      new Error("رصيد المحفظة غير كافٍ"),
+      { status: 400 }
+    );
+
+  const after = money(Number(rows[0].balance) - amount);
+  await client.query(
+    `UPDATE customer_wallets SET balance=$1,updated_at=now() WHERE user_id=$2`,
+    [after, userId]
+  );
+  await client.query(
+    `INSERT INTO wallet_transactions(user_id,type,amount,balance_after,reference_type,reference_id,note) VALUES($1,'debit',$2,$3,'checkout',$4,'دفع من المحفظة')`,
+    [userId, amount, after, referenceId]
+  );
+}
+
+async function couponDiscount(client, userId, code, subtotal) {
+  if (!code) return { id: null, code: null, discount: 0 };
+
+  const { rows } = await client.query(
+    `SELECT * FROM coupons WHERE code=$1 AND is_active=true FOR UPDATE`,
+    [String(code).trim().toUpperCase()]
+  );
+
+  const c = rows[0],
+    now = new Date();
+
+  if (!c)
+    throw Object.assign(
+      new Error("الكوبون غير موجود أو غير فعال"),
+      { status: 400 }
+    );
+
+  if (
+    new Date(c.starts_at) > now ||
+    (c.expires_at && new Date(c.expires_at) < now)
+  )
+    throw Object.assign(
+      new Error("الكوبون غير صالح حاليًا"),
+      { status: 400 }
+    );
+
+  if (
+    Number(c.usage_limit || 0) > 0 &&
+    Number(c.used_count) >= Number(c.usage_limit)
+  )
+    throw Object.assign(new Error("انتهى استخدام الكوبون"), { status: 400 });
+
+  if (subtotal < Number(c.min_order_amount || 0))
+    throw Object.assign(
+      new Error(
+        `الحد الأدنى للكوبون ${Number(c.min_order_amount).toFixed(2)} ج.م`
+      ),
+      { status: 400 }
+    );
+
+  const used = await client.query(
+    `SELECT 1 FROM coupon_usages WHERE coupon_id=$1 AND user_id=$2 LIMIT 1`,
+    [c.id, userId]
+  );
+
+  if (used.rows[0])
+    throw Object.assign(new Error("استخدمت هذا الكوبون من قبل"), { status: 400 });
+
+  let discount =
+    c.discount_type === "percentage"
+      ? (subtotal * Number(c.discount_value)) / 100
+      : Number(c.discount_value);
+
+  if (c.max_discount != null)
+    discount = Math.min(discount, Number(c.max_discount));
+
+  return {
+    id: c.id,
+    code: c.code,
+    discount: money(Math.min(discount, subtotal)),
+  };
+}
+
+async function notifyRestaurants(orders) {
+  for (const o of orders)
+    await notifyUser(
+      o.restaurant_id,
+      "طلب جديد",
+      "لديك طلب جديد يحتاج للمراجعة",
+      "order",
+      { orderId: o.id, checkoutId: o.checkout_id }
+    );
+}
+
+router.post("/bulk", requireAuth, requireRole("customer"), async (req, res, next) => {
+  const b = req.body || {},
+    key = String(b.idempotencyKey || "").trim();
+
+  if (!key || key.length > 100)
+    return res.status(400).json({ error: "مفتاح العملية مطلوب" });
+
+  const address = b.deliveryAddress
+      ? String(b.deliveryAddress).trim()
+      : "",
+    hasLat =
+      b.deliveryLatitude !== undefined &&
+      b.deliveryLatitude !== null &&
+      b.deliveryLatitude !== "",
+    hasLon =
+      b.deliveryLongitude !== undefined &&
+      b.deliveryLongitude !== null &&
+      b.deliveryLongitude !== "";
+
+  if (!address && !hasLat && !hasLon)
+    return res.status(400).json({ error: "اكتب العنوان أو حدد الموقع" });
+
+  if (
+    hasLat !== hasLon ||
+    (hasLat &&
+      (!coord(b.deliveryLatitude, -90, 90) ||
+        !coord(b.deliveryLongitude, -180, 180)))
+  )
+    return res
+      .status(400)
+      .json({ error: "إحداثيات الموقع غير صحيحة" });
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query(
+      `SELECT * FROM checkout_sessions WHERE customer_id=$1 AND idempotency_key=$2 FOR UPDATE`,
+      [req.user.id, key]
+    );
+
+    if (existing.rows[0]) {
+      const os = await client.query(
+        `SELECT * FROM orders WHERE checkout_id=$1 ORDER BY created_at`,
+        [existing.rows[0].id]
+      );
+      await client.query("COMMIT");
+      return res
+        .status(200)
+        .json({
+          checkout: existing.rows[0],
+          orders: os.rows,
+          idempotent: true,
+        });
+    }
+
+    const groups = await normalize(client, b.orders),
+      lat = hasLat ? Number(b.deliveryLatitude) : null,
+      lon = hasLon ? Number(b.deliveryLongitude) : null,
+      d = await deliveryFee(
+        client,
+        groups.map((x) => x.restaurantId),
+        lat,
+        lon
+      ),
+      subtotal = money(groups.reduce((s, g) => s + g.subtotal, 0)),
+      coupon = await couponDiscount(client, req.user.id, b.couponCode, subtotal),
+      discount = coupon.discount,
+      total = money(
+        Math.max(0, subtotal + d.fee - discount)
+      ),
+      parts = paymentParts(b, total);
+
+    let walletAmount = 0,
+      cashDue = 0;
+    for (const p of parts) {
+      if (p.method === "wallet") walletAmount += p.amount;
+      if (p.method === "cash") cashDue += p.amount;
+    }
+
+    const pendingTransfer = parts.some(
+        (p) => p.method === "vodafone_cash" || p.method === "instapay"
+      ),
+      paidNow = money(walletAmount),
+      paymentStatus = pendingTransfer
+        ? "pending"
+        : paidNow >= total - 0.01
+          ? "paid"
+          : paidNow > 0
+            ? "partially_paid"
+            : "cash_due";
+
+    const { rows: [checkout] } = await client.query(
+      `INSERT INTO checkout_sessions(customer_id,delivery_latitude,delivery_longitude,delivery_address,restaurants_count,subtotal,delivery_fee,total_amount,payment_method,order_notes,idempotency_key,coupon_id,coupon_code,discount_amount,admin_fee,payment_status,paid_amount,cash_due) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,0,$15,$16,$17) RETURNING *`,
+      [
+        req.user.id,
+        lat,
+        lon,
+        address || null,
+        groups.length,
+        subtotal,
+        d.fee,
+        total,
+        String(b.paymentMethod || "cash"),
+        b.orderNotes ? String(b.orderNotes).trim() : null,
+        key,
+        coupon.id,
+        coupon.code,
+        discount,
+        paymentStatus,
+        paidNow,
+        cashDue,
+      ]
+    );
+
+    if (walletAmount > 0)
+      await applyWallet(client, req.user.id, walletAmount, checkout.id);
+
+    const orders = [];
+    for (let idx = 0; idx < groups.length; idx++) {
+      const g = groups[idx],
+        // ✅ FIXED: Only first restaurant gets delivery_fee
+        // Subsequent restaurants get share = 0
+        share = idx === 0 ? d.fee : 0,
+        groupDiscount = subtotal
+          ? money((discount * (g.subtotal / subtotal)))
+          : 0,
+        orderTotal = money(
+          Math.max(0, g.subtotal + share - groupDiscount)
+        );
+
+      // ✅ FIXED: INSERT has correct fields
+      // payment_status, paid_amount, cash_due are now mapped correctly
+      const { rows: [order] } = await client.query(
+        `INSERT INTO orders(customer_id,restaurant_id,checkout_id,status,delivery_latitude,delivery_longitude,delivery_address,delivery_distance_meters,delivery_fee,total_amount,subtotal,payment_method,order_notes,coupon_code,discount_amount,admin_fee,payment_status,paid_amount,cash_due) VALUES($1,$2,$3,'restaurant_pending',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+        [
+          req.user.id,
+          g.restaurantId,
+          checkout.id,
+          lat,
+          lon,
+          address || null,
+          d.distance,
+          share, // ✅ Only first restaurant gets full fee
+          orderTotal,
+          g.subtotal,
+          String(b.paymentMethod || "cash"),
+          b.orderNotes ? String(b.orderNotes).trim() : null,
+          coupon.code,
+          groupDiscount,
+          share, // ✅ admin_fee also matches delivery distribution
+          paymentStatus,
+          0, // ✅ paid_amount starts at 0, will be distributed below
+          0, // ✅ cash_due starts at 0, will be distributed below
+        ]
+      );
+
+      for (const x of g.items)
+        await client.query(
+          `INSERT INTO order_items(order_id,menu_item_id,item_name,unit_price,quantity,line_total) VALUES($1,$2,$3,$4,$5,$6)`,
+          [order.id, x.item.id, x.item.name, x.unit, x.q, x.line]
+        );
+
+      orders.push(order);
+    }
+
+    // ✅ FIXED: Distribute paid_amount and cash_due proportionally
+    let remaining = total;
+    for (let i = 0; i < orders.length; i++) {
+      const o = orders[i],
+        share =
+          i === orders.length - 1
+            ? remaining
+            : money(total * (Number(o.total_amount) / Math.max(total, 1))),
+        paidShare = money(
+          Math.min(
+            share,
+            (paidNow * (Number(o.total_amount) / Math.max(total, 1)))
+          )
+        ),
+        cashShare = money(
+          Math.min(
+            share - paidShare,
+            (cashDue * (Number(o.total_amount) / Math.max(total, 1)))
+          )
+        );
+
+      await client.query(
+        `UPDATE orders SET paid_amount=$1,cash_due=$2 WHERE id=$3`,
+        [paidShare, cashShare, o.id]
+      );
+
+      remaining = money(remaining - share);
+    }
+
+    if (coupon.id) {
+      await client.query(
+        `INSERT INTO coupon_usages(coupon_id,user_id,checkout_id,discount_amount) VALUES($1,$2,$3,$4)`,
+        [coupon.id, req.user.id, checkout.id, discount]
+      );
+      await client.query(
+        `UPDATE coupons SET used_count=used_count+1,updated_at=now() WHERE id=$1`,
+        [coupon.id]
+      );
+    }
+
+    for (const p of parts)
+      await client.query(
+        `INSERT INTO order_payments(checkout_id,customer_id,method,amount,status,receipt_base64,receipt_mime,transaction_reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          checkout.id,
+          req.user.id,
+          p.method,
+          p.amount,
+          p.method === "cash" || p.method === "wallet" ? "verified" : "pending",
+          p.receiptBase64,
+          p.receiptMime,
+          p.reference,
+        ]
+      );
+
+    await client.query("COMMIT");
+
+    if (!pendingTransfer) await notifyRestaurants(orders);
+
+    await notifyRole(
+      "admin",
+      "طلب جديد",
+      "تم إنشاء طلب جديد.",
+      "order",
+      { checkoutId: checkout.id, paymentStatus }
+    );
+
+    res.status(201).json({
+      checkout,
+      orders,
+      paymentStatus,
+      paymentPending: pendingTransfer,
+    });
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    if (e.code === "23505" && key) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT * FROM checkout_sessions WHERE customer_id=$1 AND idempotency_key=$2`,
+          [req.user.id, key]
+        );
+        if (rows[0])
+          return res.status(200).json({
+            checkout: rows[0],
+            idempotent: true,
+          });
+      } catch {}
+    }
+
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;
+
