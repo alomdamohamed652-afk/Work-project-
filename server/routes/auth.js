@@ -43,13 +43,17 @@ router.post("/register-customer", async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,'customer',$6,$7,$8,$9,$10,$11)
        RETURNING id, full_name, phone, secondary_phone, email, role, status, area, address, building, floor, apartment, address_notes, created_at, updated_at`,
       [
-        fullName, phone, secondaryPhone || null, email,
+        fullName,
+        phone,
+        secondaryPhone || null,
+        email,
+        passwordHash,
         body.area ? String(body.area).trim() : null,
         body.address ? String(body.address).trim() : null,
         body.building ? String(body.building).trim() : null,
         body.floor ? String(body.floor).trim() : null,
         body.apartment ? String(body.apartment).trim() : null,
-        body.addressNotes ? String(body.addressNotes).trim() : null
+        body.addressNotes ? String(body.addressNotes).trim() : null,
       ]
     );
 
