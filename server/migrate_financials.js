@@ -1,58 +1,23 @@
 const {pool}=require("./db");
 async function main(){
  await pool.query(`
- CREATE TABLE IF NOT EXISTS customer_wallets(
-  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK(balance>=0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
- );
- CREATE TABLE IF NOT EXISTS wallet_transactions(
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK(type IN ('credit','debit','refund','adjustment')),
-  amount NUMERIC(12,2) NOT NULL CHECK(amount>0), balance_after NUMERIC(12,2) NOT NULL CHECK(balance_after>=0),
-  reference_type TEXT, reference_id UUID, note TEXT, created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
- );
+ CREATE TABLE IF NOT EXISTS customer_wallets(user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK(balance>=0),created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ CREATE TABLE IF NOT EXISTS wallet_transactions(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,type TEXT NOT NULL CHECK(type IN ('credit','debit','refund','adjustment')),amount NUMERIC(12,2) NOT NULL CHECK(amount>0),balance_after NUMERIC(12,2) NOT NULL CHECK(balance_after>=0),reference_type TEXT,reference_id UUID,note TEXT,created_by UUID REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
  CREATE INDEX IF NOT EXISTS wallet_transactions_user_idx ON wallet_transactions(user_id,created_at DESC);
- CREATE TABLE IF NOT EXISTS order_payments(
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), checkout_id UUID REFERENCES checkout_sessions(id) ON DELETE CASCADE,
-  order_id UUID REFERENCES orders(id) ON DELETE CASCADE, customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  method TEXT NOT NULL CHECK(method IN ('cash','wallet','vodafone_cash','instapay')),
-  amount NUMERIC(12,2) NOT NULL CHECK(amount>0), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','verified','rejected')),
-  receipt_base64 TEXT, receipt_mime TEXT, transaction_reference TEXT, rejection_reason TEXT,
-  verified_by UUID REFERENCES users(id) ON DELETE SET NULL, verified_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
- );
- CREATE INDEX IF NOT EXISTS order_payments_checkout_idx ON order_payments(checkout_id,created_at);
- CREATE INDEX IF NOT EXISTS order_payments_status_idx ON order_payments(status,created_at DESC);
- CREATE TABLE IF NOT EXISTS driver_ledger_entries(
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), driver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  order_id UUID REFERENCES orders(id) ON DELETE SET NULL, type TEXT NOT NULL CHECK(type IN ('earning','settlement','adjustment')),
-  amount NUMERIC(12,2) NOT NULL CHECK(amount>0), note TEXT, created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
- );
- CREATE INDEX IF NOT EXISTS driver_ledger_driver_idx ON driver_ledger_entries(driver_id,created_at DESC);
- CREATE UNIQUE INDEX IF NOT EXISTS driver_ledger_order_earning_idx ON driver_ledger_entries(order_id,type) WHERE type='earning' AND order_id IS NOT NULL;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS coupon_code TEXT;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS admin_fee NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending';
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS cash_due NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS payment_verified_at TIMESTAMPTZ;
+ CREATE TABLE IF NOT EXISTS order_payments(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),checkout_id UUID REFERENCES checkout_sessions(id) ON DELETE CASCADE,order_id UUID REFERENCES orders(id) ON DELETE CASCADE,customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,method TEXT NOT NULL CHECK(method IN ('cash','wallet','vodafone_cash','instapay')),amount NUMERIC(12,2) NOT NULL CHECK(amount>0),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','verified','rejected')),receipt_base64 TEXT,receipt_mime TEXT,transaction_reference TEXT,rejection_reason TEXT,verified_by UUID REFERENCES users(id) ON DELETE SET NULL,verified_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ CREATE INDEX IF NOT EXISTS order_payments_checkout_idx ON order_payments(checkout_id,created_at);CREATE INDEX IF NOT EXISTS order_payments_status_idx ON order_payments(status,created_at DESC);
+ CREATE TABLE IF NOT EXISTS driver_ledger_entries(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),driver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,order_id UUID REFERENCES orders(id) ON DELETE SET NULL,type TEXT NOT NULL CHECK(type IN ('earning','settlement','adjustment')),amount NUMERIC(12,2) NOT NULL CHECK(amount>0),note TEXT,created_by UUID REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ CREATE INDEX IF NOT EXISTS driver_ledger_driver_idx ON driver_ledger_entries(driver_id,created_at DESC);CREATE UNIQUE INDEX IF NOT EXISTS driver_ledger_order_earning_idx ON driver_ledger_entries(order_id,type) WHERE type='earning' AND order_id IS NOT NULL;
+ ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS idempotency_key TEXT;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS coupon_code TEXT;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS admin_fee NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending';ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS cash_due NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS payment_verified_at TIMESTAMPTZ;
  CREATE UNIQUE INDEX IF NOT EXISTS checkout_sessions_customer_idempotency_idx ON checkout_sessions(customer_id,idempotency_key) WHERE idempotency_key IS NOT NULL;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_fee NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending';
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS cash_due NUMERIC(12,2) NOT NULL DEFAULT 0;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_verified_at TIMESTAMPTZ;
- ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_adjustment_note TEXT;
+ ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_fee NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending';ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE orders ADD COLUMN IF NOT EXISTS cash_due NUMERIC(12,2) NOT NULL DEFAULT 0;ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_verified_at TIMESTAMPTZ;ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_adjustment_note TEXT;
  ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_enabled BOOLEAN NOT NULL DEFAULT true;
- INSERT INTO platform_settings(key,value) VALUES('driver.earning_flat','20') ON CONFLICT(key) DO NOTHING;
- INSERT INTO platform_settings(key,value) VALUES('payments.vodafone_cash_label','Vodafone Cash'),('payments.instapay_label','InstaPay') ON CONFLICT(key) DO NOTHING;
+ INSERT INTO platform_settings(key,value) VALUES('driver.earning_flat','20'),('payments.vodafone_cash_label','Vodafone Cash'),('payments.instapay_label','InstaPay') ON CONFLICT(key) DO NOTHING;
+ CREATE OR REPLACE FUNCTION ensure_customer_wallet() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.role='customer' THEN INSERT INTO customer_wallets(user_id) VALUES(NEW.id) ON CONFLICT(user_id) DO NOTHING;END IF;RETURN NEW;END $$;
+ DROP TRIGGER IF EXISTS trg_ensure_customer_wallet ON users;CREATE TRIGGER trg_ensure_customer_wallet AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION ensure_customer_wallet();
+ CREATE OR REPLACE FUNCTION record_driver_earning() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE earning NUMERIC(12,2);BEGIN IF NEW.status='delivered' AND COALESCE(OLD.status,'')<>'delivered' AND NEW.driver_id IS NOT NULL THEN SELECT COALESCE(NULLIF(value,'')::numeric,20) INTO earning FROM platform_settings WHERE key='driver.earning_flat';INSERT INTO driver_ledger_entries(driver_id,order_id,type,amount,note) VALUES(NEW.driver_id,NEW.id,'earning',COALESCE(earning,20),'عمولة توصيل الطلب') ON CONFLICT DO NOTHING;END IF;RETURN NEW;END $$;
+ DROP TRIGGER IF EXISTS trg_record_driver_earning ON orders;CREATE TRIGGER trg_record_driver_earning AFTER UPDATE OF status ON orders FOR EACH ROW EXECUTE FUNCTION record_driver_earning();
  `);
- console.log('Financial migration completed'); await pool.end();
+ console.log('Financial migration completed');await pool.end();
 }
 main().catch(async e=>{console.error('Financial migration failed:',e);await pool.end();process.exit(1)});
