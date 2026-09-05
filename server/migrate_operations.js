@@ -1,125 +1,26 @@
 const {pool}=require('./db');
-
-async function main(){
-await pool.query(`
-CREATE TABLE IF NOT EXISTS offices(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL UNIQUE, phone TEXT, address TEXT,
- is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS office_service_areas(
- office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
- governorate_id UUID REFERENCES egypt_governorates(id) ON DELETE CASCADE,
- center_id UUID REFERENCES egypt_centers(id) ON DELETE CASCADE,
- name TEXT NOT NULL, center_latitude NUMERIC, center_longitude NUMERIC, radius_meters INTEGER,
- is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
- PRIMARY KEY(office_id,name)
-);
+async function main(){await pool.query(`
+CREATE TABLE IF NOT EXISTS offices(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),name TEXT NOT NULL UNIQUE,phone TEXT,address TEXT,is_active BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS user_offices(user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,is_primary BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(user_id,office_id));
+CREATE INDEX IF NOT EXISTS user_offices_lookup ON user_offices(office_id,user_id);
+CREATE TABLE IF NOT EXISTS office_service_areas(office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,governorate_id UUID REFERENCES egypt_governorates(id) ON DELETE CASCADE,center_id UUID REFERENCES egypt_centers(id) ON DELETE CASCADE,name TEXT NOT NULL,center_latitude NUMERIC,center_longitude NUMERIC,radius_meters INTEGER,is_active BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(office_id,name));
 CREATE INDEX IF NOT EXISTS office_service_area_lookup ON office_service_areas(governorate_id,center_id,is_active);
-CREATE TABLE IF NOT EXISTS restaurant_service_areas(
- restaurant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
- governorate_id UUID REFERENCES egypt_governorates(id) ON DELETE CASCADE,
- center_id UUID REFERENCES egypt_centers(id) ON DELETE CASCADE,
- name TEXT NOT NULL, center_latitude NUMERIC, center_longitude NUMERIC, radius_meters INTEGER,
- is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
- PRIMARY KEY(restaurant_id,office_id,name)
-);
+CREATE TABLE IF NOT EXISTS restaurant_service_areas(restaurant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,governorate_id UUID REFERENCES egypt_governorates(id) ON DELETE CASCADE,center_id UUID REFERENCES egypt_centers(id) ON DELETE CASCADE,name TEXT NOT NULL,center_latitude NUMERIC,center_longitude NUMERIC,radius_meters INTEGER,is_active BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(restaurant_id,office_id,name));
 CREATE INDEX IF NOT EXISTS restaurant_service_area_lookup ON restaurant_service_areas(governorate_id,center_id,is_active);
-CREATE TABLE IF NOT EXISTS home_sections(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), section_type TEXT NOT NULL, title TEXT, subtitle TEXT,
- payload JSONB NOT NULL DEFAULT '{}'::jsonb, is_active BOOLEAN NOT NULL DEFAULT true,
- sort_order INTEGER NOT NULL DEFAULT 0, starts_at TIMESTAMPTZ, expires_at TIMESTAMPTZ,
- created_by UUID REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS app_feature_flags(
- key TEXT PRIMARY KEY, is_enabled BOOLEAN NOT NULL DEFAULT true, config JSONB NOT NULL DEFAULT '{}'::jsonb,
- updated_by UUID REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-INSERT INTO app_feature_flags(key,is_enabled) VALUES ('home_banners',true),('home_categories',true),('home_membership',true),('home_custom_sections',true),('home_popups',true) ON CONFLICT(key) DO NOTHING;
-ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS maintenance_orders INTEGER NOT NULL DEFAULT 0 CHECK(maintenance_orders>=0);
-ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS upgrade_orders INTEGER NOT NULL DEFAULT 0 CHECK(upgrade_orders>=0);
-ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS badge_image_url TEXT;
-ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS reward_config JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS maintenance_orders_count INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS upgrade_orders_count INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS last_month_tier_id UUID REFERENCES membership_tiers(id) ON DELETE SET NULL;
-ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS month_closed BOOLEAN NOT NULL DEFAULT false;
-CREATE TABLE IF NOT EXISTS reward_definitions(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tier_id UUID REFERENCES membership_tiers(id) ON DELETE CASCADE,
- name TEXT NOT NULL, reward_type TEXT NOT NULL, config JSONB NOT NULL DEFAULT '{}'::jsonb,
- is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS customer_rewards(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- reward_id UUID REFERENCES reward_definitions(id) ON DELETE SET NULL, code TEXT, remaining_uses INTEGER,
- remaining_budget NUMERIC(12,2), starts_at TIMESTAMPTZ, expires_at TIMESTAMPTZ, is_active BOOLEAN NOT NULL DEFAULT true,
- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS support_conversations(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- office_id UUID REFERENCES offices(id) ON DELETE SET NULL, category TEXT NOT NULL DEFAULT 'general', order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
- subject TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','pending','resolved','closed')),
- assigned_staff_id UUID REFERENCES users(id) ON DELETE SET NULL, needs_reply BOOLEAN NOT NULL DEFAULT true,
- first_customer_message_at TIMESTAMPTZ, last_customer_message_at TIMESTAMPTZ, last_staff_message_at TIMESTAMPTZ,
- followup_sent_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS support_messages(
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), conversation_id UUID NOT NULL REFERENCES support_conversations(id) ON DELETE CASCADE,
- sender_id UUID REFERENCES users(id) ON DELETE SET NULL, sender_role TEXT, body TEXT NOT NULL, message_type TEXT NOT NULL DEFAULT 'text',
- metadata JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS support_queue_idx ON support_conversations(status,needs_reply,updated_at DESC);
-CREATE INDEX IF NOT EXISTS support_customer_idx ON support_conversations(customer_id,updated_at DESC);
-CREATE TABLE IF NOT EXISTS employee_profiles(
- user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, employee_code TEXT UNIQUE,
- office_id UUID REFERENCES offices(id) ON DELETE SET NULL, job_title TEXT, hired_at DATE, is_active BOOLEAN NOT NULL DEFAULT true,
- permissions JSONB NOT NULL DEFAULT '[]'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS audit_logs(
- id BIGSERIAL PRIMARY KEY, actor_id UUID REFERENCES users(id) ON DELETE SET NULL, actor_role TEXT, office_id UUID REFERENCES offices(id) ON DELETE SET NULL,
- action TEXT NOT NULL, module TEXT NOT NULL, method TEXT, path TEXT, entity_type TEXT, entity_id TEXT,
- actor_name TEXT, actor_phone TEXT, ip_address INET, user_agent TEXT, metadata JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS audit_logs_time_idx ON audit_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs(actor_id,created_at DESC);
-CREATE INDEX IF NOT EXISTS audit_logs_module_idx ON audit_logs(module,action,created_at DESC);
-CREATE TABLE IF NOT EXISTS audit_retention_events(
- id BIGSERIAL PRIMARY KEY, actor_id UUID REFERENCES users(id) ON DELETE SET NULL, from_at TIMESTAMPTZ NOT NULL, to_at TIMESTAMPTZ NOT NULL,
- deleted_count BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-`);
-await pool.query(`
-CREATE OR REPLACE FUNCTION sync_monthly_membership(p_user UUID) RETURNS VOID LANGUAGE plpgsql AS $$
-DECLARE m TEXT:=to_char(current_date,'YYYY-MM'); cm RECORD; cnt INTEGER; cur RECORD; next_tier RECORD;
-BEGIN
-SELECT * INTO cm FROM customer_memberships WHERE user_id=p_user FOR UPDATE;
-IF NOT FOUND THEN RETURN; END IF;
-IF cm.month_key=m THEN RETURN; END IF;
-SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id;
-IF cur.id IS NULL THEN SELECT * INTO cur FROM membership_tiers WHERE is_active ORDER BY sort_order LIMIT 1; END IF;
-IF cm.maintenance_orders_count < COALESCE(cur.maintenance_orders,0) THEN
- SELECT * INTO next_tier FROM membership_tiers WHERE is_active AND sort_order < COALESCE(cur.sort_order,999999) ORDER BY sort_order DESC LIMIT 1;
- IF next_tier.id IS NOT NULL THEN cur:=next_tier; END IF;
-END IF;
-UPDATE customer_memberships SET tier_id=cur.id,last_month_tier_id=cur.id,month_key=m,orders_count=0,maintenance_orders_count=0,upgrade_orders_count=0,month_closed=false,updated_at=now() WHERE user_id=p_user;
-END $$;
-CREATE OR REPLACE FUNCTION update_membership_on_delivery() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE cm RECORD; cur RECORD; higher RECORD; cnt INTEGER; m TEXT:=to_char(current_date,'YYYY-MM');
-BEGIN
-IF NEW.status='delivered' AND COALESCE(OLD.status,'')<>'delivered' THEN
- PERFORM sync_monthly_membership(NEW.customer_id);
- SELECT * INTO cm FROM customer_memberships WHERE user_id=NEW.customer_id FOR UPDATE;
- SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id;
- SELECT COUNT(*)::int INTO cnt FROM orders WHERE customer_id=NEW.customer_id AND status='delivered' AND to_char(created_at,'YYYY-MM')=m;
- SELECT * INTO higher FROM membership_tiers WHERE is_active AND sort_order>cur.sort_order AND upgrade_orders<=cnt ORDER BY sort_order DESC LIMIT 1;
- IF higher.id IS NOT NULL THEN UPDATE customer_memberships SET tier_id=higher.id,orders_count=cnt,maintenance_orders_count=0,upgrade_orders_count=0,updated_at=now() WHERE user_id=NEW.customer_id;
- ELSE UPDATE customer_memberships SET orders_count=cnt,maintenance_orders_count=CASE WHEN cur.maintenance_orders>cnt THEN cnt ELSE cur.maintenance_orders END,upgrade_orders_count=cnt,updated_at=now() WHERE user_id=NEW.customer_id; END IF;
-END IF; RETURN NEW;
-END $$;
-DROP TRIGGER IF EXISTS trg_update_customer_membership ON orders;
-CREATE TRIGGER trg_update_customer_membership AFTER UPDATE OF status ON orders FOR EACH ROW EXECUTE FUNCTION update_membership_on_delivery();
-`);
-console.log('Operations migration completed');
-}
-module.exports=main;
-if(require.main===module)main().then(()=>pool.end()).catch(async e=>{console.error(e);await pool.end();process.exit(1)});
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS office_id UUID REFERENCES offices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS orders_office_idx ON orders(office_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS home_sections(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),section_type TEXT NOT NULL,title TEXT,subtitle TEXT,payload JSONB NOT NULL DEFAULT '{}'::jsonb,is_active BOOLEAN NOT NULL DEFAULT true,sort_order INTEGER NOT NULL DEFAULT 0,starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,created_by UUID REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS app_feature_flags(key TEXT PRIMARY KEY,is_enabled BOOLEAN NOT NULL DEFAULT true,config JSONB NOT NULL DEFAULT '{}'::jsonb,updated_by UUID REFERENCES users(id) ON DELETE SET NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+INSERT INTO app_feature_flags(key,is_enabled) VALUES('home_banners',true),('home_categories',true),('home_membership',true),('home_custom_sections',true),('home_popups',true) ON CONFLICT(key) DO NOTHING;
+ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS maintenance_orders INTEGER NOT NULL DEFAULT 0 CHECK(maintenance_orders>=0);ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS upgrade_orders INTEGER NOT NULL DEFAULT 0 CHECK(upgrade_orders>=0);ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS badge_image_url TEXT;ALTER TABLE membership_tiers ADD COLUMN IF NOT EXISTS reward_config JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS maintenance_orders_count INTEGER NOT NULL DEFAULT 0;ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS upgrade_orders_count INTEGER NOT NULL DEFAULT 0;ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS last_month_tier_id UUID REFERENCES membership_tiers(id) ON DELETE SET NULL;ALTER TABLE customer_memberships ADD COLUMN IF NOT EXISTS month_closed BOOLEAN NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS reward_definitions(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),tier_id UUID REFERENCES membership_tiers(id) ON DELETE CASCADE,name TEXT NOT NULL,reward_type TEXT NOT NULL,config JSONB NOT NULL DEFAULT '{}'::jsonb,is_active BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS customer_rewards(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,reward_id UUID REFERENCES reward_definitions(id) ON DELETE SET NULL,code TEXT,remaining_uses INTEGER,remaining_budget NUMERIC(12,2),starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,is_active BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS support_conversations(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,office_id UUID REFERENCES offices(id) ON DELETE SET NULL,category TEXT NOT NULL DEFAULT 'general',order_id UUID REFERENCES orders(id) ON DELETE SET NULL,subject TEXT,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN('open','pending','resolved','closed')),assigned_staff_id UUID REFERENCES users(id) ON DELETE SET NULL,needs_reply BOOLEAN NOT NULL DEFAULT true,first_customer_message_at TIMESTAMPTZ,last_customer_message_at TIMESTAMPTZ,last_staff_message_at TIMESTAMPTZ,followup_sent_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS support_messages(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),conversation_id UUID NOT NULL REFERENCES support_conversations(id) ON DELETE CASCADE,sender_id UUID REFERENCES users(id) ON DELETE SET NULL,sender_role TEXT,body TEXT NOT NULL,message_type TEXT NOT NULL DEFAULT 'text',metadata JSONB NOT NULL DEFAULT '{}'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE INDEX IF NOT EXISTS support_queue_idx ON support_conversations(status,needs_reply,updated_at DESC);CREATE INDEX IF NOT EXISTS support_customer_idx ON support_conversations(customer_id,updated_at DESC);
+CREATE TABLE IF NOT EXISTS employee_profiles(user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,employee_code TEXT UNIQUE,office_id UUID REFERENCES offices(id) ON DELETE SET NULL,job_title TEXT,hired_at DATE,is_active BOOLEAN NOT NULL DEFAULT true,permissions JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS audit_logs(id BIGSERIAL PRIMARY KEY,actor_id UUID REFERENCES users(id) ON DELETE SET NULL,actor_role TEXT,office_id UUID REFERENCES offices(id) ON DELETE SET NULL,action TEXT NOT NULL,module TEXT NOT NULL,method TEXT,path TEXT,entity_type TEXT,entity_id TEXT,actor_name TEXT,actor_phone TEXT,ip_address INET,user_agent TEXT,metadata JSONB NOT NULL DEFAULT '{}'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE INDEX IF NOT EXISTS audit_logs_time_idx ON audit_logs(created_at DESC);CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs(actor_id,created_at DESC);CREATE INDEX IF NOT EXISTS audit_logs_module_idx ON audit_logs(module,action,created_at DESC);
+CREATE TABLE IF NOT EXISTS audit_retention_events(id BIGSERIAL PRIMARY KEY,actor_id UUID REFERENCES users(id) ON DELETE SET NULL,from_at TIMESTAMPTZ NOT NULL,to_at TIMESTAMPTZ NOT NULL,deleted_count BIGINT NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT now());`);
+await pool.query(`CREATE OR REPLACE FUNCTION sync_monthly_membership(p_user UUID) RETURNS VOID LANGUAGE plpgsql AS $$ DECLARE m TEXT:=to_char(current_date,'YYYY-MM');cm RECORD;cur RECORD;prev RECORD;BEGIN SELECT * INTO cm FROM customer_memberships WHERE user_id=p_user FOR UPDATE;IF NOT FOUND OR cm.month_key=m THEN RETURN;END IF;SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id;IF cur.id IS NULL THEN SELECT * INTO cur FROM membership_tiers WHERE is_active ORDER BY sort_order LIMIT 1;END IF;IF cm.maintenance_orders_count<COALESCE(cur.maintenance_orders,0) THEN SELECT * INTO prev FROM membership_tiers WHERE is_active AND sort_order<cur.sort_order ORDER BY sort_order DESC LIMIT 1;IF prev.id IS NOT NULL THEN cur:=prev;END IF;END IF;UPDATE customer_memberships SET last_month_tier_id=cur.id,tier_id=cur.id,month_key=m,orders_count=0,maintenance_orders_count=0,upgrade_orders_count=0,month_closed=false,updated_at=now() WHERE user_id=p_user;END $$;`);
+await pool.query(`CREATE OR REPLACE FUNCTION update_membership_on_delivery() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE cm RECORD;cur RECORD;higher RECORD;cnt INTEGER;m TEXT:=to_char(current_date,'YYYY-MM');BEGIN IF NEW.status='delivered' AND COALESCE(OLD.status,'')<>'delivered' THEN PERFORM sync_monthly_membership(NEW.customer_id);SELECT * INTO cm FROM customer_memberships WHERE user_id=NEW.customer_id FOR UPDATE;SELECT * INTO cur FROM membership_tiers WHERE id=cm.tier_id;SELECT COUNT(*)::int INTO cnt FROM orders WHERE customer_id=NEW.customer_id AND status='delivered' AND to_char(created_at,'YYYY-MM')=m;SELECT * INTO higher FROM membership_tiers WHERE is_active AND sort_order>cur.sort_order AND upgrade_orders>0 AND upgrade_orders<=cnt ORDER BY sort_order DESC LIMIT 1;IF higher.id IS NOT NULL THEN UPDATE customer_memberships SET tier_id=higher.id,orders_count=0,maintenance_orders_count=0,upgrade_orders_count=0,updated_at=now() WHERE user_id=NEW.customer_id;ELSE UPDATE customer_memberships SET orders_count=cnt,maintenance_orders_count=cnt,upgrade_orders_count=cnt,updated_at=now() WHERE user_id=NEW.customer_id;END IF;END IF;RETURN NEW;END $$;DROP TRIGGER IF EXISTS trg_update_customer_membership ON orders;CREATE TRIGGER trg_update_customer_membership AFTER UPDATE OF status ON orders FOR EACH ROW EXECUTE FUNCTION update_membership_on_delivery();`);
+console.log('Operations migration completed')}module.exports=main;if(require.main===module)main().then(()=>pool.end()).catch(async e=>{console.error(e);await pool.end();process.exit(1)});
