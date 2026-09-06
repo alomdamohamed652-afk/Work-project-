@@ -100,6 +100,7 @@ app.use('/api/admin/controls', adminControlsRoutes);
 app.use('/api/admin/order-edits', adminOrderEditsRoutes);
 app.use('/api/admin/wallets', adminWalletRoutes);
 app.use('/api/admin/finance', financeRoutes);
+app.use('/api/financial', financialRoutes);
 app.use('/api/admin/financial', financialRoutes);
 app.use('/api/admin/refunds', refundRoutes);
 app.use('/api/payment-adjustments', paymentAdjustmentRoutes);
