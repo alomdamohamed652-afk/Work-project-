@@ -18,7 +18,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test tests/unit",
+    "test": "node --test tests/unit/*.test.mjs tests/unit/*.test.js",
     "test:e2e": "node --test tests/e2e",
     "db:migrate:delivery": "node server/migrate_delivery.js",
     "db:migrate:marketing": "node server/migrate_marketing.js",
@@ -35,7 +35,8 @@
     "db:migrate:item-adjustments": "node server/migrate_order_item_adjustments.js",
     "db:migrate:ratings": "node server/migrate_ratings.js",
     "db:migrate:super-admin": "node server/migrate_super_admin.js",
-    "audit:workflow": "npm run test && npm run lint"
+    "audit:workflow": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",
