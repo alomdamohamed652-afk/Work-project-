@@ -64,9 +64,16 @@ export default function Operations() {
       </Section>
 
       <Section title="التشغيل والمناطق">
+        <Nav title="إعدادات ورسوم التوصيل" sub="سعر البداية والمسافة المجانية والرسوم الإضافية ومناطق التسعير" path="/admin/delivery-settings"/>
         <Nav title="المحافظات والمراكز ونطاق التوصيل" sub="تنظيم المحافظات والمراكز وتحديد دوائر الخدمة المسموح للطلبات داخلها" path="/admin/locations"/>
         <Nav title="الفئات والمستويات" sub="الترقية، الحفاظ على المستوى والمزايا" path="/admin/tiers"/>
         <Nav title="المكافآت" sub="خصومات وشحن مجاني ورصيد وقسائم" path="/admin/rewards"/>
+      </Section>
+
+      <Section title="المدفوعات والمالية">
+        <Nav title="طرق الدفع" sub="إضافة وتعديل وإخفاء طرق الدفع وبيانات التحويل" path="/admin/payment-methods"/>
+        <Nav title="مراجعة التحويلات" sub="تأكيد أو رفض التحويلات وإيصالات الدفع" path="/admin/payments"/>
+        <Nav title="المالية والتقارير" sub="ملخص الطلبات ورسوم التوصيل وأداء المندوبين" path="/admin/finance"/>
       </Section>
 
       <Section title="الحسابات والدعم والرقابة">
