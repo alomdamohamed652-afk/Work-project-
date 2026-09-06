@@ -17,7 +17,7 @@ export const theme={
   dangerSoft:"#FDECEC",
   info:"#175CD3",
   infoSoft:"#EFF8FF",
-  overlay:"rgba(15,23,42,.45)"
+  overlay:"rgba(15,23,42,.45)",\n  radius:{sm:12,md:16,lg:20},\n  spacing:{xs:6,sm:10,md:16,lg:24}\n
 } as const;
 
 export const fonts={size:{xs:10,sm:11,md:13,lg:16,xl:20},weight:{regular:'400',medium:'500',bold:'700',heavy:'900'}} as const;
