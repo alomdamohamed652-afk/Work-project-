@@ -146,3 +146,11 @@ test('driver dispatch routes have one canonical workflow owner', () => {
   assert.equal(legacyOrdersOwnsDriverDispatch, false);
 });
 
+
+
+test('manual address keeps delivery price pending instead of inventing a fee', () => {
+  const summary = (coords) => coords ? { pendingDeliveryQuote:false } : { pendingDeliveryQuote:true, deliveryFees:null };
+  assert.equal(summary(false).pendingDeliveryQuote, true);
+  assert.equal(summary(false).deliveryFees, null);
+  assert.equal(summary(true).pendingDeliveryQuote, false);
+});
