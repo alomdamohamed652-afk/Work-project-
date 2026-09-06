@@ -64,8 +64,11 @@ test('customer -> admin -> restaurant -> driver -> delivery -> rating', { skip: 
   const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, deliveryAddress: 'E2E Test Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
   assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
   const orderId = checkout.body.orders?.[0]?.id;
-  const itemId = checkout.body.orders?.[0]?.items?.[0]?.id;
-  assert.ok(orderId); assert.ok(itemId);
+  assert.ok(orderId);
+  const createdItems=await request(`/api/orders/${orderId}/items`,{headers:auth(customer.token)});
+  assert.equal(createdItems.response.status,200,JSON.stringify(createdItems.body));
+  const itemId=createdItems.body.items?.[0]?.id;
+  assert.ok(itemId);
   const adminDecision = await request(`/api/orders/${orderId}/admin-decision`, { method: 'PATCH', headers: auth(admin.token), body: JSON.stringify({ approve: true }) });
   assert.equal(adminDecision.response.status, 200, JSON.stringify(adminDecision.body));
   assert.equal(adminDecision.body.order.status, 'preparing');
@@ -98,8 +101,11 @@ test('unavailable item -> customer replacement -> restaurant ready', { skip: !re
   const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-replace-${Date.now()}`, deliveryAddress: 'E2E Replacement Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
   assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
   const orderId = checkout.body.orders?.[0]?.id;
-  const itemId = checkout.body.orders?.[0]?.items?.[0]?.id;
-  assert.ok(orderId); assert.ok(itemId);
+  assert.ok(orderId);
+  const createdItems=await request(`/api/orders/${orderId}/items`,{headers:auth(customer.token)});
+  assert.equal(createdItems.response.status,200,JSON.stringify(createdItems.body));
+  const itemId=createdItems.body.items?.[0]?.id;
+  assert.ok(itemId);
   assert.equal((await request(`/api/orders/${orderId}/admin-decision`, { method: 'PATCH', headers: auth(admin.token), body: JSON.stringify({ approve: true }) })).response.status, 200);
   const unavailable = await request(`/api/orders/${orderId}/items/${itemId}/availability`, { method: 'PATCH', headers: auth(restaurant.token), body: JSON.stringify({ available: false, reason: 'E2E unavailable' }) });
   assert.equal(unavailable.response.status, 200, JSON.stringify(unavailable.body));
