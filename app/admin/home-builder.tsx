@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
-const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
+const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['banner','بانر','عرض بارز داخل الصفحة'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
 const LAYOUTS=[['horizontal','بطاقات أفقية'],['grid','شبكة'],['single','عنصر واحد']] as const;
 const DESTINATIONS=[
   ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
@@ -91,7 +91,7 @@ export default function Builder(){
 
   const toggle=async(x:any)=>{try{await patch(x.id,{isActive:!x.is_active});load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة');}};
   const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');const existingRoute=p.items?.[0]?.route||'/customer/restaurants';const known=DESTINATIONS.some(d=>d[2]===existingRoute);setRoute(known?existingRoute:'custom');setCustomRoute(known?'':existingRoute);};
-  const saveEdit=async()=>{if(!editing)return;if(!title.trim())return setError('اكتب اسم القسم');try{setBusy(true);await patch(editing.id,{title:title.trim(),subtitle:subtitle.trim(),payload:{layout,items},startsAt:startsAt.trim()||null,expiresAt:expiresAt.trim()||null});setEditing(null);setTitle('');setSubtitle('');setItems([]);setStartsAt('');setExpiresAt('');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل')}finally{setBusy(false)}};
+  const saveEdit=async()=>{if(!editing)return;if(!title.trim())return setError('اكتب اسم القسم');try{setBusy(true);await patch(editing.id,{sectionType:type,title:title.trim(),subtitle:subtitle.trim(),payload:{layout,items},startsAt:startsAt.trim()||null,expiresAt:expiresAt.trim()||null});setEditing(null);setTitle('');setSubtitle('');setItems([]);setStartsAt('');setExpiresAt('');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل')}finally{setBusy(false)}};
   const move=async(x:any,delta:number)=>{
     const sorted=[...sections].sort((a,b)=>a.sort_order-b.sort_order);
     const i=sorted.findIndex(v=>v.id===x.id),j=i+delta;
@@ -111,7 +111,7 @@ export default function Builder(){
     <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Pressable onPress={()=>router.replace('/admin')} style={s.back}><Text style={s.backText}>←</Text></Pressable>
       <Text style={s.title}>تنظيم الواجهة الرئيسية</Text>
-      <Text style={s.sub}>هنا أنت تتحكم في الأقسام والنوافذ المنبثقة. البانرات الرئيسية لها إدارة مستقلة لأنها تظهر من جدول مختلف فعلًا.</Text>
+      <Text style={s.sub}>هنا تتحكم في ترتيب الأقسام والبانرات والنوافذ المنبثقة. البانرات الرئيسية يمكن إدارتها من إدارة البانرات، ويمكن أيضًا إنشاء بانر ضمن الأقسام المخصصة.</Text>
       <Pressable onPress={()=>router.push('/admin/banners')} style={s.bannerLink}><Text style={s.bannerLinkText}>🖼️ إدارة البانرات الرئيسية</Text></Pressable>
 
       <View style={s.card}>
