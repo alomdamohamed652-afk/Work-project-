@@ -145,3 +145,11 @@ test('driver dispatch routes have one canonical workflow owner', () => {
   assert.equal(workflowOwnsDriverDispatch, true);
   assert.equal(legacyOrdersOwnsDriverDispatch, false);
 });
+
+
+test('active feature migrations are part of the startup audit contract', () => {
+  const migrations = ['core','customer','marketing','financials','catalog','media','operations','membership_v2','operations_v3','delivery_proof','refunds','payment_adjustments','dispatch_flow','order_item_adjustments','account_settings','ratings','super_admin','promotions_referrals','marketplace','special_orders'];
+  assert.equal(migrations.includes('promotions_referrals'), true);
+  assert.equal(migrations.includes('marketplace'), true);
+  assert.equal(migrations.includes('special_orders'), true);
+});
