@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/marketplace-special-order-dispatch]
   pull_request:
     branches: [main]
 

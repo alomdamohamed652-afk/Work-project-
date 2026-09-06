@@ -32,7 +32,12 @@ const migrateOrderItemAdjustments = require('./migrate_order_item_adjustments');
 const migrateAccountSettings = require('./migrate_account_settings');
 const migrateRatings = require('./migrate_ratings');
 const migrateSuperAdmin = require('./migrate_super_admin');
+const migrateMarketplace = require('./migrate_marketplace');
+const migrateSpecialOrders = require('./migrate_special_orders');
+const migratePromotionsReferrals = require('./migrate_promotions_referrals');
 const merchantTypeRoutes = require('./routes/merchant_types');
+const marketplaceRoutes = require('./routes/marketplaces');
+const specialOrderRoutes = require('./routes/special_orders');
 const { auditMiddleware } = require('./audit');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -74,6 +79,7 @@ const favoriteRoutes = require('./routes/favorites');
 const operationsRoutes = require('./routes/operations');
 const orderProofRoutes = require('./routes/order_proof');
 const ratingsRoutes = require('./routes/ratings');
+const promotionsReferralsRoutes = require('./routes/promotions_referrals');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -110,7 +116,10 @@ app.use('/api/driver/tools', driverToolsRoutes);
 app.use('/api/membership-refresh', membershipRefreshRoutes);
 app.use('/api/customer/eligible-restaurants', eligibleRestaurantsRoutes);
 app.use('/api/customer/merchant-types', merchantTypeRoutes);
+app.use('/api/marketplaces', marketplaceRoutes);
+app.use('/api/special-orders', specialOrderRoutes);
 app.use('/api/rewards', rewardsRoutes);
+app.use('/api/promotions-referrals', promotionsReferralsRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/catalog', catalogRoutes);
@@ -139,5 +148,5 @@ async function processPaymentAdjustmentNotifications() { try { await withAdvisor
 async function processDispatch() { try { await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders()); } catch (e) { console.error('Dispatch flow check failed', e.message); } }
 async function notifyUserSafe(id) { try { const { notifyUser } = require('./push'); await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {}); } catch (e) { console.error('Support notification failed', e.message); } }
 async function processSupportSla() { try { await withAdvisoryLock(81004, async (client) => { const { rows } = await client.query(`SELECT sc.id,sc.customer_id FROM support_conversations sc WHERE sc.status IN ('open','pending') AND sc.needs_reply=true AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL AND sc.last_staff_message_at IS NULL AND sc.first_customer_message_at<=now()-interval '2 minutes'`); for (const x of rows) { await notifyUserSafe(x.customer_id); await client.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1', [x.id]); } }); } catch (e) { console.error('Support SLA check failed', e.message); } }
-async function start() { await migrateCore(); await migrateCustomer(); await migrateMarketing(); await migrateFinancials(); await migrateCatalog(); await migrateMedia(); await migrateOperations(); await migrateMembershipV2(); await migrateOperationsV3(); await migrateDeliveryProof(); await migrateRefunds(); await migratePaymentAdjustments(); await migrateDispatchFlow(); await migrateOrderItemAdjustments(); await migrateAccountSettings(); await migrateRatings(); await migrateSuperAdmin(); await pool.query('SELECT 1'); await cleanupMedia(); setInterval(processDispatch, 15000); setInterval(processPaymentAdjustmentNotifications, 15000); setInterval(cleanupMedia, 60 * 60 * 1000); setInterval(processSupportSla, 30000); app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`)); }
+async function start() { await migrateCore(); await migrateCustomer(); await migrateMarketing(); await migrateFinancials(); await migrateCatalog(); await migrateMedia(); await migrateOperations(); await migrateMembershipV2(); await migrateOperationsV3(); await migrateDeliveryProof(); await migrateRefunds(); await migratePaymentAdjustments(); await migrateDispatchFlow(); await migrateOrderItemAdjustments(); await migrateAccountSettings(); await migrateRatings(); await migrateSuperAdmin(); await migrateMarketplace(); await migrateSpecialOrders(); await migratePromotionsReferrals(); await pool.query('SELECT 1'); await cleanupMedia(); setInterval(processDispatch, 15000); setInterval(processPaymentAdjustmentNotifications, 15000); setInterval(cleanupMedia, 60 * 60 * 1000); setInterval(processSupportSla, 30000); app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`)); }
 start().catch((error) => { if (process.env.SENTRY_DSN) Sentry.captureException(error); console.error('Unable to start API:', error); process.exit(1); });
