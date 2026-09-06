@@ -13,6 +13,7 @@ const DESTINATIONS=[
   ['pharmacies','قسم الصيدليات','/customer/restaurants?merchantType=pharmacy'],
   ['supermarkets','قسم السوبر ماركت','/customer/restaurants?merchantType=supermarket'],
   ['groceries','قسم البقالة','/customer/restaurants?merchantType=grocery'],
+  ['butcher','قسم الجزارة','/customer/restaurants?merchantType=butcher'],
   ['favorites','المفضلة','/customer/favorites'],
   ['wallet','المحفظة','/customer/wallet'],
   ['orders','طلباتي','/customer/tracking'],
