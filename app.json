@@ -12,7 +12,11 @@
     ],
     "android": {
       "package": "com.waselni.app",
-      "permissions": ["ACCESS_COARSE_LOCATION","ACCESS_FINE_LOCATION","ACCESS_BACKGROUND_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.waselni.app",
@@ -21,6 +25,7 @@
         "NSLocationWhenInUseUsageDescription": "نستخدم موقعك لتحديد عنوان التوصيل وتتبع الطلب.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "نستخدم موقع المندوب في الخلفية أثناء التوصيل لتحديث موقعه."
       }
-    }
+    },
+    "androidSoftwareKeyboardLayoutMode": "resize"
   }
 }
