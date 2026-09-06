@@ -2,12 +2,9 @@ const Sentry = require('@sentry/node');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const jwtSecret = String(process.env.JWT_SECRET || '');
-if (isProduction && jwtSecret.length < 32) {
-  throw new Error('JWT_SECRET must be at least 32 characters in production');
-}
-if (!jwtSecret) {
-  throw new Error('JWT_SECRET is required');
-}
+if (isProduction && jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters in production');
+if (!jwtSecret) throw new Error('JWT_SECRET is required');
+if (isProduction && !process.env.ALLOWED_ORIGINS) throw new Error('ALLOWED_ORIGINS is required in production');
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -50,7 +47,6 @@ const adminControlsRoutes = require('./routes/admin_controls');
 const adminOrderEditsRoutes = require('./routes/admin_order_edits');
 const adminWalletRoutes = require('./routes/admin_wallets');
 const driverRoutes = require('./routes/driver');
-const driverDispatchRoutes = require('./routes/driver_dispatch');
 const driverToolsRoutes = require('./routes/driver_tools');
 const membershipRefreshRoutes = require('./routes/membership_refresh');
 const eligibleRestaurantsRoutes = require('./routes/eligible_restaurants');
@@ -87,16 +83,13 @@ const allowedOrigins = String(process.env.ALLOWED_ORIGINS || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-if (isProduction && allowedOrigins.length === 0) {
-  throw new Error('ALLOWED_ORIGINS is required in production');
-}
-
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-    return callback(null, allowedOrigins.includes(origin));
+    callback(null, allowedOrigins.includes(origin));
   },
   credentials: true
 }));
@@ -108,10 +101,11 @@ const authLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
-  message: { error: 'محاولات دخول كثيرة. حاول مرة أخرى بعد قليل.' }
+  message: { error: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.' }
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register-customer', authLimiter);
+app.use('/api/auth/continue', authLimiter);
 
 app.get('/', (_req, res) => res.json({ name: 'Work-project API', status: 'running' }));
 app.use('/health', healthRoutes);
@@ -148,7 +142,6 @@ app.use('/api/orders', orderWorkflowRoutes);
 app.use('/api/orders', orderItemAdjustmentRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/orders', orderProofRoutes);
-app.use('/api/orders', driverDispatchRoutes);
 app.use('/api/customer/orders', customerOrderEditsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/coupons', couponRoutes);
@@ -156,18 +149,12 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/customer/favorites', favoriteRoutes);
 app.use('/api/operations', operationsRoutes);
 
-if (process.env.SENTRY_DSN) {
-  Sentry.setupExpressErrorHandler(app);
-}
+if (process.env.SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
 
 app.use((err, _req, res, _next) => {
   if (process.env.SENTRY_DSN) Sentry.captureException(err);
   console.error(err);
-  const known = [
-    'DELIVERY_PROOF_REQUIRED',
-    'ORDER_MUST_HAVE_ACTIVE_ITEM',
-    'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'
-  ];
+  const known = ['DELIVERY_PROOF_REQUIRED', 'ORDER_MUST_HAVE_ACTIVE_ITEM', 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'];
   const msg = err.message === 'DELIVERY_PROOF_REQUIRED'
     ? 'إثبات التسليم مطلوب لهذا الطلب المدفوع بالكامل'
     : err.message === 'ORDER_MUST_HAVE_ACTIVE_ITEM'
@@ -197,9 +184,7 @@ async function withAdvisoryLock(lockKey, job) {
 async function cleanupMedia() {
   try {
     await withAdvisoryLock(81001, async (client) => {
-      const { rowCount } = await client.query(
-        `DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`
-      );
+      const { rowCount } = await client.query(`DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`);
       if (rowCount) console.log(`Media cleanup removed ${rowCount} expired images`);
     });
   } catch (e) {
@@ -210,27 +195,16 @@ async function cleanupMedia() {
 async function processPaymentAdjustmentNotifications() {
   try {
     await withAdvisoryLock(81002, async (client) => {
-      const { rows } = await client.query(
-        `SELECT id,customer_id,order_id,amount
-         FROM payment_adjustments
-         WHERE status='pending' AND customer_notified_at IS NULL
-         ORDER BY created_at ASC LIMIT 100`
-      );
+      const { rows } = await client.query(`
+        SELECT id,customer_id,order_id,amount FROM payment_adjustments
+        WHERE status='pending' AND customer_notified_at IS NULL
+        ORDER BY created_at ASC LIMIT 100
+      `);
       const { notifyUser } = require('./push');
       for (const x of rows) {
         try {
-          await notifyUser(
-            x.customer_id,
-            'يوجد مبلغ مستحق لك',
-            `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`,
-            'payment_adjustment',
-            { adjustmentId: x.id, orderId: x.order_id, amount: x.amount }
-          );
-          await client.query(
-            `UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now()
-             WHERE id=$1 AND customer_notified_at IS NULL`,
-            [x.id]
-          );
+          await notifyUser(x.customer_id, 'يوجد مبلغ مستحق لك', `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`, 'payment_adjustment', { adjustmentId: x.id, orderId: x.order_id, amount: x.amount });
+          await client.query(`UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now() WHERE id=$1 AND customer_notified_at IS NULL`, [x.id]);
         } catch (e) {
           console.error('Payment adjustment notification failed', x.id, e.message);
         }
@@ -243,37 +217,9 @@ async function processPaymentAdjustmentNotifications() {
 
 async function processDispatch() {
   try {
-    await withAdvisoryLock(81003, async () => {
-      await orderWorkflowRoutes.dispatchPreparingOrders();
-    });
+    await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders());
   } catch (e) {
     console.error('Dispatch flow check failed', e.message);
-  }
-}
-
-async function processSupportSla() {
-  try {
-    await withAdvisoryLock(81004, async (client) => {
-      const { rows } = await client.query(
-        `SELECT sc.id,sc.customer_id
-         FROM support_conversations sc
-         WHERE sc.status IN ('open','pending')
-           AND sc.needs_reply=true
-           AND sc.followup_sent_at IS NULL
-           AND sc.first_customer_message_at IS NOT NULL
-           AND sc.last_staff_message_at IS NULL
-           AND sc.first_customer_message_at<=now()-interval '2 minutes'`
-      );
-      for (const x of rows) {
-        await notifyUserSafe(x.customer_id);
-        await client.query(
-          'UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1',
-          [x.id]
-        );
-      }
-    });
-  } catch (e) {
-    console.error('Support SLA check failed', e.message);
   }
 }
 
@@ -283,6 +229,26 @@ async function notifyUserSafe(id) {
     await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {});
   } catch (e) {
     console.error('Support notification failed', e.message);
+  }
+}
+
+async function processSupportSla() {
+  try {
+    await withAdvisoryLock(81004, async (client) => {
+      const { rows } = await client.query(`
+        SELECT sc.id,sc.customer_id FROM support_conversations sc
+        WHERE sc.status IN ('open','pending') AND sc.needs_reply=true
+          AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL
+          AND sc.last_staff_message_at IS NULL
+          AND sc.first_customer_message_at<=now()-interval '2 minutes'
+      `);
+      for (const x of rows) {
+        await notifyUserSafe(x.customer_id);
+        await client.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1', [x.id]);
+      }
+    });
+  } catch (e) {
+    console.error('Support SLA check failed', e.message);
   }
 }
 
@@ -304,12 +270,10 @@ async function start() {
   await migrateAccountSettings();
   await pool.query('SELECT 1');
   await cleanupMedia();
-
   setInterval(processDispatch, 15000);
   setInterval(processPaymentAdjustmentNotifications, 15000);
   setInterval(cleanupMedia, 60 * 60 * 1000);
   setInterval(processSupportSla, 30000);
-
   app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`));
 }
 
