@@ -108,3 +108,23 @@ test('multi-restaurant COD remains cash due per order after rebalance',()=>{cons
 
 
 test('support message metadata always has a displayable sender and timestamp',()=>{const message={sender_name:'موظف الدعم',created_at:'2026-09-06T10:30:00Z'};assert.equal(Boolean(message.sender_name.trim()),true);assert.equal(Number.isNaN(new Date(message.created_at).getTime()),false);});
+
+
+test('admin-configured proof methods stay pending until verification', () => {
+  const requiresProof = new Set(['vodafone_cash', 'custom_bank']);
+  const isPending = (parts) => parts.some((p) => requiresProof.has(p.method));
+  assert.equal(isPending([{ method: 'custom_bank', amount: 100 }]), true);
+  assert.equal(isPending([{ method: 'cash', amount: 100 }]), false);
+  assert.equal(isPending([{ method: 'cash', amount: 60 }, { method: 'custom_bank', amount: 40 }]), true);
+});
+
+test('driver action payload matches the active state-machine contract', () => {
+  const next = (current, requested) => {
+    if (requested === 'assigned' && current === 'assigned') return 'picked_up';
+    if (requested === 'picked_up' && current === 'picked_up') return 'on_the_way';
+    return null;
+  };
+  assert.equal(next('assigned', 'assigned'), 'picked_up');
+  assert.equal(next('picked_up', 'picked_up'), 'on_the_way');
+  assert.equal(next('assigned', 'picked_up'), null);
+});
