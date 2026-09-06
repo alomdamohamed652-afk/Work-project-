@@ -1,1 +1,320 @@
-const express=require('express');const{pool}=require('./db');const migrateCore=require('./migrate');const migrateCustomer=require('./migrate_customer');const migrateMarketing=require('./migrate_marketing');const migrateFinancials=require('./migrate_financials');const migrateCatalog=require('./migrate_catalog');const migrateMedia=require('./migrate_media');const migrateOperations=require('./migrate_operations');const migrateMembershipV2=require('./migrate_membership_v2');const migrateOperationsV3=require('./migrate_operations_v3');const migrateDeliveryProof=require('./migrate_delivery_proof');const migrateRefunds=require('./migrate_refunds');const migratePaymentAdjustments=require('./migrate_payment_adjustments');const migrateDispatchFlow=require('./migrate_dispatch_flow');const migrateOrderItemAdjustments=require('./migrate_order_item_adjustments');const migrateAccountSettings=require('./migrate_account_settings');const merchantTypeRoutes=require('./routes/merchant_types');const{auditMiddleware}=require('./audit');const authRoutes=require('./routes/auth');const adminRoutes=require('./routes/admin');const adminCatalogRoutes=require('./routes/admin_catalog');const adminRestaurantTagsRoutes=require('./routes/admin_restaurant_tags');const adminDispatchRoutes=require('./routes/admin_dispatch');const adminMenuRoutes=require('./routes/admin_menu');const adminMediaRoutes=require('./routes/admin_media');const adminControlsRoutes=require('./routes/admin_controls');const adminOrderEditsRoutes=require('./routes/admin_order_edits');const adminWalletRoutes=require('./routes/admin_wallets');const driverRoutes=require('./routes/driver');const driverDispatchRoutes=require('./routes/driver_dispatch');const driverToolsRoutes=require('./routes/driver_tools');const membershipRefreshRoutes=require('./routes/membership_refresh');const eligibleRestaurantsRoutes=require('./routes/eligible_restaurants');const rewardsRoutes=require('./routes/rewards');const healthRoutes=require('./routes/health');const categoryRoutes=require('./routes/categories');const restaurantRoutes=require('./routes/restaurants');const catalogRoutes=require('./routes/catalog');const mediaRoutes=require('./routes/media');const restaurantProfileRoutes=require('./routes/restaurant_profile');const menuRoutes=require('./routes/menu');const invitationRoutes=require('./routes/invitations');const locationRoutes=require('./routes/location');const orderWorkflowRoutes=require('./routes/order_workflow');const orderItemAdjustmentRoutes=require('./routes/order_item_adjustments');const customerOrderEditsRoutes=require('./routes/customer_order_edits');const orderRoutes=require('./routes/orders');const checkoutRoutes=require('./routes/checkout');const financialRoutes=require('./routes/financial');const financeRoutes=require('./routes/finance');const refundRoutes=require('./routes/refunds');const paymentAdjustmentRoutes=require('./routes/payment_adjustments');const notificationRoutes=require('./routes/notifications');const couponRoutes=require('./routes/coupons');const customerRoutes=require('./routes/customer');const favoriteRoutes=require('./routes/favorites');const operationsRoutes=require('./routes/operations');const orderProofRoutes=require('./routes/order_proof');const app=express();const port=Number(process.env.PORT||3000);app.use(express.json({limit:'8mb'}));app.use(auditMiddleware);app.get('/',(_req,res)=>res.json({name:'Work-project API',status:'running'}));app.use('/health',healthRoutes);app.use('/api/auth',authRoutes);app.use('/api/admin',adminRoutes);app.use('/api/admin/catalog',adminCatalogRoutes);app.use('/api/admin/restaurant-tags',adminRestaurantTagsRoutes);app.use('/api/admin/dispatch',adminDispatchRoutes);app.use('/api/admin/menu',adminMenuRoutes);app.use('/api/admin/media',adminMediaRoutes);app.use('/api/admin/controls',adminControlsRoutes);app.use('/api/admin/order-edits',adminOrderEditsRoutes);app.use('/api/admin/wallets',adminWalletRoutes);app.use('/api/admin/finance',financeRoutes);app.use('/api/admin/financial',financialRoutes);app.use('/api/admin/refunds',refundRoutes);app.use('/api/payment-adjustments',paymentAdjustmentRoutes);app.use('/api/driver',driverRoutes);app.use('/api/driver/tools',driverToolsRoutes);app.use('/api/membership-refresh',membershipRefreshRoutes);app.use('/api/customer/eligible-restaurants',eligibleRestaurantsRoutes);app.use('/api/customer/merchant-types',merchantTypeRoutes);app.use('/api/rewards',rewardsRoutes);app.use('/api/checkout',checkoutRoutes);app.use('/api/catalog',catalogRoutes);app.use('/api/media',mediaRoutes);app.use('/api/restaurant-profile',restaurantProfileRoutes);app.use('/api/categories',categoryRoutes);app.use('/api/restaurants',restaurantRoutes);app.use('/api/menu',menuRoutes);app.use('/api/invitations',invitationRoutes);app.use('/api/location',locationRoutes);app.use('/api/orders',orderWorkflowRoutes);app.use('/api/orders',orderItemAdjustmentRoutes);app.use('/api/orders',orderRoutes);app.use('/api/orders',orderProofRoutes);app.use('/api/orders',driverDispatchRoutes);app.use('/api/customer/orders',customerOrderEditsRoutes);app.use('/api/notifications',notificationRoutes);app.use('/api/admin/coupons',couponRoutes);app.use('/api/customer',customerRoutes);app.use('/api/customer/favorites',favoriteRoutes);app.use('/api/operations',operationsRoutes);app.use((err,_req,res,_next)=>{console.error(err);const known=['DELIVERY_PROOF_REQUIRED','ORDER_MUST_HAVE_ACTIVE_ITEM','ITEM_UNAVAILABLE_MUST_BE_RESOLVED'];const msg=err.message==='DELIVERY_PROOF_REQUIRED'?'إثبات التسليم مطلوب لهذا الطلب المدفوع بالكامل':err.message==='ORDER_MUST_HAVE_ACTIVE_ITEM'?'يجب أن يحتوي الطلب على صنف واحد على الأقل':err.message==='ITEM_UNAVAILABLE_MUST_BE_RESOLVED'?'يجب حل حالة الصنف غير المتاح أولًا':'Internal server error';res.status(known.includes(err.message)?409:500).json({error:msg})});async function cleanupMedia(){try{const{rowCount}=await pool.query(`DELETE FROM media_assets WHERE created_at<now()-interval '3 days'`);if(rowCount)console.log(`Media cleanup removed ${rowCount} expired images`)}catch(e){console.error('Media cleanup failed',e.message)}}async function processPaymentAdjustmentNotifications(){try{const{rows}=await pool.query(`SELECT id,customer_id,order_id,amount FROM payment_adjustments WHERE status='pending' AND customer_notified_at IS NULL ORDER BY created_at ASC LIMIT 100`);const{notifyUser}=require('./push');for(const x of rows){try{await notifyUser(x.customer_id,'يوجد مبلغ مستحق لك',`تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`,'payment_adjustment',{adjustmentId:x.id,orderId:x.order_id,amount:x.amount});await pool.query(`UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now() WHERE id=$1 AND customer_notified_at IS NULL`,[x.id])}catch(e){console.error('Payment adjustment notification failed',x.id,e.message)}}}catch(e){console.error('Payment adjustment notification scan failed',e.message)}}async function start(){await migrateCore();await migrateCustomer();await migrateMarketing();await migrateFinancials();await migrateCatalog();await migrateMedia();await migrateOperations();await migrateMembershipV2();await migrateOperationsV3();await migrateDeliveryProof();await migrateRefunds();await migratePaymentAdjustments();await migrateDispatchFlow();await migrateOrderItemAdjustments();await migrateAccountSettings();await pool.query('SELECT 1');await cleanupMedia();setInterval(async()=>{try{await orderWorkflowRoutes.dispatchPreparingOrders()}catch(e){console.error('Dispatch flow check failed',e.message)}},15000);setInterval(processPaymentAdjustmentNotifications,15000);setInterval(cleanupMedia,60*60*1000);setInterval(async()=>{try{const{rows}=await pool.query(`SELECT sc.id,sc.customer_id FROM support_conversations sc WHERE sc.status IN ('open','pending') AND sc.needs_reply=true AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL AND sc.last_staff_message_at IS NULL AND sc.first_customer_message_at<=now()-interval '2 minutes'`);for(const x of rows){await notifyUserSafe(x.customer_id);await pool.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1',[x.id])}}catch(e){console.error('Support SLA check failed',e.message)}},30000);app.listen(port,'0.0.0.0',()=>console.log(`API listening on port ${port}`))}async function notifyUserSafe(id){try{const{notifyUser}=require('./push');await notifyUser(id,'تنبيه من الدعم','نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.','support',{})}catch(e){console.error('Support notification failed',e.message)}}start().catch(error=>{console.error('Unable to start API:',error);process.exit(1)});
+const Sentry = require('@sentry/node');
+
+const isProduction = process.env.NODE_ENV === 'production';
+const jwtSecret = String(process.env.JWT_SECRET || '');
+if (isProduction && jwtSecret.length < 32) {
+  throw new Error('JWT_SECRET must be at least 32 characters in production');
+}
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET is required');
+}
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1)
+  });
+}
+
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const { pool } = require('./db');
+const migrateCore = require('./migrate');
+const migrateCustomer = require('./migrate_customer');
+const migrateMarketing = require('./migrate_marketing');
+const migrateFinancials = require('./migrate_financials');
+const migrateCatalog = require('./migrate_catalog');
+const migrateMedia = require('./migrate_media');
+const migrateOperations = require('./migrate_operations');
+const migrateMembershipV2 = require('./migrate_membership_v2');
+const migrateOperationsV3 = require('./migrate_operations_v3');
+const migrateDeliveryProof = require('./migrate_delivery_proof');
+const migrateRefunds = require('./migrate_refunds');
+const migratePaymentAdjustments = require('./migrate_payment_adjustments');
+const migrateDispatchFlow = require('./migrate_dispatch_flow');
+const migrateOrderItemAdjustments = require('./migrate_order_item_adjustments');
+const migrateAccountSettings = require('./migrate_account_settings');
+const merchantTypeRoutes = require('./routes/merchant_types');
+const { auditMiddleware } = require('./audit');
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const adminCatalogRoutes = require('./routes/admin_catalog');
+const adminRestaurantTagsRoutes = require('./routes/admin_restaurant_tags');
+const adminDispatchRoutes = require('./routes/admin_dispatch');
+const adminMenuRoutes = require('./routes/admin_menu');
+const adminMediaRoutes = require('./routes/admin_media');
+const adminControlsRoutes = require('./routes/admin_controls');
+const adminOrderEditsRoutes = require('./routes/admin_order_edits');
+const adminWalletRoutes = require('./routes/admin_wallets');
+const driverRoutes = require('./routes/driver');
+const driverDispatchRoutes = require('./routes/driver_dispatch');
+const driverToolsRoutes = require('./routes/driver_tools');
+const membershipRefreshRoutes = require('./routes/membership_refresh');
+const eligibleRestaurantsRoutes = require('./routes/eligible_restaurants');
+const rewardsRoutes = require('./routes/rewards');
+const healthRoutes = require('./routes/health');
+const categoryRoutes = require('./routes/categories');
+const restaurantRoutes = require('./routes/restaurants');
+const catalogRoutes = require('./routes/catalog');
+const mediaRoutes = require('./routes/media');
+const restaurantProfileRoutes = require('./routes/restaurant_profile');
+const menuRoutes = require('./routes/menu');
+const invitationRoutes = require('./routes/invitations');
+const locationRoutes = require('./routes/location');
+const orderWorkflowRoutes = require('./routes/order_workflow');
+const orderItemAdjustmentRoutes = require('./routes/order_item_adjustments');
+const customerOrderEditsRoutes = require('./routes/customer_order_edits');
+const orderRoutes = require('./routes/orders');
+const checkoutRoutes = require('./routes/checkout');
+const financialRoutes = require('./routes/financial');
+const financeRoutes = require('./routes/finance');
+const refundRoutes = require('./routes/refunds');
+const paymentAdjustmentRoutes = require('./routes/payment_adjustments');
+const notificationRoutes = require('./routes/notifications');
+const couponRoutes = require('./routes/coupons');
+const customerRoutes = require('./routes/customer');
+const favoriteRoutes = require('./routes/favorites');
+const operationsRoutes = require('./routes/operations');
+const orderProofRoutes = require('./routes/order_proof');
+
+const app = express();
+const port = Number(process.env.PORT || 3000);
+const allowedOrigins = String(process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+if (isProduction && allowedOrigins.length === 0) {
+  throw new Error('ALLOWED_ORIGINS is required in production');
+}
+
+app.disable('x-powered-by');
+app.use(helmet());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    return callback(null, allowedOrigins.includes(origin));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '8mb' }));
+app.use(auditMiddleware);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'محاولات دخول كثيرة. حاول مرة أخرى بعد قليل.' }
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register-customer', authLimiter);
+
+app.get('/', (_req, res) => res.json({ name: 'Work-project API', status: 'running' }));
+app.use('/health', healthRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/catalog', adminCatalogRoutes);
+app.use('/api/admin/restaurant-tags', adminRestaurantTagsRoutes);
+app.use('/api/admin/dispatch', adminDispatchRoutes);
+app.use('/api/admin/menu', adminMenuRoutes);
+app.use('/api/admin/media', adminMediaRoutes);
+app.use('/api/admin/controls', adminControlsRoutes);
+app.use('/api/admin/order-edits', adminOrderEditsRoutes);
+app.use('/api/admin/wallets', adminWalletRoutes);
+app.use('/api/admin/finance', financeRoutes);
+app.use('/api/admin/financial', financialRoutes);
+app.use('/api/admin/refunds', refundRoutes);
+app.use('/api/payment-adjustments', paymentAdjustmentRoutes);
+app.use('/api/driver', driverRoutes);
+app.use('/api/driver/tools', driverToolsRoutes);
+app.use('/api/membership-refresh', membershipRefreshRoutes);
+app.use('/api/customer/eligible-restaurants', eligibleRestaurantsRoutes);
+app.use('/api/customer/merchant-types', merchantTypeRoutes);
+app.use('/api/rewards', rewardsRoutes);
+app.use('/api/checkout', checkoutRoutes);
+app.use('/api/catalog', catalogRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/restaurant-profile', restaurantProfileRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/invitations', invitationRoutes);
+app.use('/api/location', locationRoutes);
+app.use('/api/orders', orderWorkflowRoutes);
+app.use('/api/orders', orderItemAdjustmentRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/orders', orderProofRoutes);
+app.use('/api/orders', driverDispatchRoutes);
+app.use('/api/customer/orders', customerOrderEditsRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin/coupons', couponRoutes);
+app.use('/api/customer', customerRoutes);
+app.use('/api/customer/favorites', favoriteRoutes);
+app.use('/api/operations', operationsRoutes);
+
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
+app.use((err, _req, res, _next) => {
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  console.error(err);
+  const known = [
+    'DELIVERY_PROOF_REQUIRED',
+    'ORDER_MUST_HAVE_ACTIVE_ITEM',
+    'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'
+  ];
+  const msg = err.message === 'DELIVERY_PROOF_REQUIRED'
+    ? 'إثبات التسليم مطلوب لهذا الطلب المدفوع بالكامل'
+    : err.message === 'ORDER_MUST_HAVE_ACTIVE_ITEM'
+      ? 'يجب أن يحتوي الطلب على صنف واحد على الأقل'
+      : err.message === 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'
+        ? 'يجب حل حالة الصنف غير المتاح أولًا'
+        : 'Internal server error';
+  res.status(known.includes(err.message) ? 409 : 500).json({ error: msg });
+});
+
+async function withAdvisoryLock(lockKey, job) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [lockKey]);
+    if (!result.rows[0].locked) return false;
+    try {
+      await job(client);
+      return true;
+    } finally {
+      await client.query('SELECT pg_advisory_unlock($1)', [lockKey]);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+async function cleanupMedia() {
+  try {
+    await withAdvisoryLock(81001, async (client) => {
+      const { rowCount } = await client.query(
+        `DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`
+      );
+      if (rowCount) console.log(`Media cleanup removed ${rowCount} expired images`);
+    });
+  } catch (e) {
+    console.error('Media cleanup failed', e.message);
+  }
+}
+
+async function processPaymentAdjustmentNotifications() {
+  try {
+    await withAdvisoryLock(81002, async (client) => {
+      const { rows } = await client.query(
+        `SELECT id,customer_id,order_id,amount
+         FROM payment_adjustments
+         WHERE status='pending' AND customer_notified_at IS NULL
+         ORDER BY created_at ASC LIMIT 100`
+      );
+      const { notifyUser } = require('./push');
+      for (const x of rows) {
+        try {
+          await notifyUser(
+            x.customer_id,
+            'يوجد مبلغ مستحق لك',
+            `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`,
+            'payment_adjustment',
+            { adjustmentId: x.id, orderId: x.order_id, amount: x.amount }
+          );
+          await client.query(
+            `UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now()
+             WHERE id=$1 AND customer_notified_at IS NULL`,
+            [x.id]
+          );
+        } catch (e) {
+          console.error('Payment adjustment notification failed', x.id, e.message);
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Payment adjustment notification scan failed', e.message);
+  }
+}
+
+async function processDispatch() {
+  try {
+    await withAdvisoryLock(81003, async () => {
+      await orderWorkflowRoutes.dispatchPreparingOrders();
+    });
+  } catch (e) {
+    console.error('Dispatch flow check failed', e.message);
+  }
+}
+
+async function processSupportSla() {
+  try {
+    await withAdvisoryLock(81004, async (client) => {
+      const { rows } = await client.query(
+        `SELECT sc.id,sc.customer_id
+         FROM support_conversations sc
+         WHERE sc.status IN ('open','pending')
+           AND sc.needs_reply=true
+           AND sc.followup_sent_at IS NULL
+           AND sc.first_customer_message_at IS NOT NULL
+           AND sc.last_staff_message_at IS NULL
+           AND sc.first_customer_message_at<=now()-interval '2 minutes'`
+      );
+      for (const x of rows) {
+        await notifyUserSafe(x.customer_id);
+        await client.query(
+          'UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1',
+          [x.id]
+        );
+      }
+    });
+  } catch (e) {
+    console.error('Support SLA check failed', e.message);
+  }
+}
+
+async function notifyUserSafe(id) {
+  try {
+    const { notifyUser } = require('./push');
+    await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {});
+  } catch (e) {
+    console.error('Support notification failed', e.message);
+  }
+}
+
+async function start() {
+  await migrateCore();
+  await migrateCustomer();
+  await migrateMarketing();
+  await migrateFinancials();
+  await migrateCatalog();
+  await migrateMedia();
+  await migrateOperations();
+  await migrateMembershipV2();
+  await migrateOperationsV3();
+  await migrateDeliveryProof();
+  await migrateRefunds();
+  await migratePaymentAdjustments();
+  await migrateDispatchFlow();
+  await migrateOrderItemAdjustments();
+  await migrateAccountSettings();
+  await pool.query('SELECT 1');
+  await cleanupMedia();
+
+  setInterval(processDispatch, 15000);
+  setInterval(processPaymentAdjustmentNotifications, 15000);
+  setInterval(cleanupMedia, 60 * 60 * 1000);
+  setInterval(processSupportSla, 30000);
+
+  app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`));
+}
+
+start().catch((error) => {
+  if (process.env.SENTRY_DSN) Sentry.captureException(error);
+  console.error('Unable to start API:', error);
+  process.exit(1);
+});
