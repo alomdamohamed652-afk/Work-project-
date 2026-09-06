@@ -34,6 +34,7 @@ const migratePaymentAdjustments = require('./migrate_payment_adjustments');
 const migrateDispatchFlow = require('./migrate_dispatch_flow');
 const migrateOrderItemAdjustments = require('./migrate_order_item_adjustments');
 const migrateAccountSettings = require('./migrate_account_settings');
+const migrateRatings = require('./migrate_ratings');
 const merchantTypeRoutes = require('./routes/merchant_types');
 const { auditMiddleware } = require('./audit');
 const authRoutes = require('./routes/auth');
@@ -75,6 +76,7 @@ const customerRoutes = require('./routes/customer');
 const favoriteRoutes = require('./routes/favorites');
 const operationsRoutes = require('./routes/operations');
 const orderProofRoutes = require('./routes/order_proof');
+const ratingsRoutes = require('./routes/ratings');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -129,6 +131,7 @@ app.use('/api/membership-refresh', membershipRefreshRoutes);
 app.use('/api/customer/eligible-restaurants', eligibleRestaurantsRoutes);
 app.use('/api/customer/merchant-types', merchantTypeRoutes);
 app.use('/api/rewards', rewardsRoutes);
+app.use('/api/ratings', ratingsRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/media', mediaRoutes);
@@ -187,69 +190,46 @@ async function cleanupMedia() {
       const { rowCount } = await client.query(`DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`);
       if (rowCount) console.log(`Media cleanup removed ${rowCount} expired images`);
     });
-  } catch (e) {
-    console.error('Media cleanup failed', e.message);
-  }
+  } catch (e) { console.error('Media cleanup failed', e.message); }
 }
 
 async function processPaymentAdjustmentNotifications() {
   try {
     await withAdvisoryLock(81002, async (client) => {
-      const { rows } = await client.query(`
-        SELECT id,customer_id,order_id,amount FROM payment_adjustments
-        WHERE status='pending' AND customer_notified_at IS NULL
-        ORDER BY created_at ASC LIMIT 100
-      `);
+      const { rows } = await client.query(`SELECT id,customer_id,order_id,amount FROM payment_adjustments WHERE status='pending' AND customer_notified_at IS NULL ORDER BY created_at ASC LIMIT 100`);
       const { notifyUser } = require('./push');
       for (const x of rows) {
         try {
           await notifyUser(x.customer_id, 'يوجد مبلغ مستحق لك', `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`, 'payment_adjustment', { adjustmentId: x.id, orderId: x.order_id, amount: x.amount });
           await client.query(`UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now() WHERE id=$1 AND customer_notified_at IS NULL`, [x.id]);
-        } catch (e) {
-          console.error('Payment adjustment notification failed', x.id, e.message);
-        }
+        } catch (e) { console.error('Payment adjustment notification failed', x.id, e.message); }
       }
     });
-  } catch (e) {
-    console.error('Payment adjustment notification scan failed', e.message);
-  }
+  } catch (e) { console.error('Payment adjustment notification scan failed', e.message); }
 }
 
 async function processDispatch() {
-  try {
-    await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders());
-  } catch (e) {
-    console.error('Dispatch flow check failed', e.message);
-  }
+  try { await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders()); }
+  catch (e) { console.error('Dispatch flow check failed', e.message); }
 }
 
 async function notifyUserSafe(id) {
   try {
     const { notifyUser } = require('./push');
     await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {});
-  } catch (e) {
-    console.error('Support notification failed', e.message);
-  }
+  } catch (e) { console.error('Support notification failed', e.message); }
 }
 
 async function processSupportSla() {
   try {
     await withAdvisoryLock(81004, async (client) => {
-      const { rows } = await client.query(`
-        SELECT sc.id,sc.customer_id FROM support_conversations sc
-        WHERE sc.status IN ('open','pending') AND sc.needs_reply=true
-          AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL
-          AND sc.last_staff_message_at IS NULL
-          AND sc.first_customer_message_at<=now()-interval '2 minutes'
-      `);
+      const { rows } = await client.query(`SELECT sc.id,sc.customer_id FROM support_conversations sc WHERE sc.status IN ('open','pending') AND sc.needs_reply=true AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL AND sc.last_staff_message_at IS NULL AND sc.first_customer_message_at<=now()-interval '2 minutes'`);
       for (const x of rows) {
         await notifyUserSafe(x.customer_id);
         await client.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1', [x.id]);
       }
     });
-  } catch (e) {
-    console.error('Support SLA check failed', e.message);
-  }
+  } catch (e) { console.error('Support SLA check failed', e.message); }
 }
 
 async function start() {
@@ -266,8 +246,10 @@ async function start() {
   await migrateRefunds();
   await migratePaymentAdjustments();
   await migrateDispatchFlow();
+  await migrateOrderItemAdjustmentRoutes;
   await migrateOrderItemAdjustments();
   await migrateAccountSettings();
+  await migrateRatings();
   await pool.query('SELECT 1');
   await cleanupMedia();
   setInterval(processDispatch, 15000);
