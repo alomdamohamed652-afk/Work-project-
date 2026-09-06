@@ -8,7 +8,10 @@ import { theme } from '@/constants/theme';
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 const TYPES=[['custom','قسم عادي','عنوان ومحتوى قابلان للتخصيص'],['banner','بانر','رسالة بارزة أعلى الصفحة'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
 const DESTINATIONS=[
-  ['restaurants','استكشاف المطاعم','/customer/restaurants'],
+  ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
+  ['pharmacies','قسم الصيدليات','/customer/restaurants?merchantType=pharmacy'],
+  ['supermarkets','قسم السوبر ماركت','/customer/restaurants?merchantType=supermarket'],
+  ['groceries','قسم البقالة','/customer/restaurants?merchantType=grocery'],
   ['favorites','المفضلة','/customer/favorites'],
   ['wallet','المحفظة','/customer/wallet'],
   ['orders','طلباتي','/customer/tracking'],
@@ -20,6 +23,7 @@ export default function Builder(){
   const [title,setTitle]=useState('');
   const [subtitle,setSubtitle]=useState('');
   const [button,setButton]=useState('');
+  const [itemImage,setItemImage]=useState('');
   const [route,setRoute]=useState('/customer/restaurants');
   const [type,setType]=useState<string>('custom');
   const [busy,setBusy]=useState(false);
@@ -51,13 +55,13 @@ export default function Builder(){
           sectionType:type,
           title:title.trim(),
           subtitle:subtitle.trim(),
-          payload:{items:[{title:title.trim(),button:button.trim()||'فتح القسم',route}]},
+          payload:{items:[{title:title.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]},
           sortOrder:sections.length,
         }),
       });
       const d=await read(r);
       if(!r.ok)throw Error(d.error||'تعذر إضافة القسم');
-      setTitle('');setSubtitle('');setButton('');
+      setTitle('');setSubtitle('');setButton('');setItemImage('');
       await load();
     }catch(e){setError(e instanceof Error?e.message:'تعذر إضافة القسم');}
     finally{setBusy(false);}
@@ -90,7 +94,7 @@ export default function Builder(){
     <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Pressable onPress={()=>router.replace('/admin')} style={s.back}><Text style={s.backText}>←</Text></Pressable>
       <Text style={s.title}>تنظيم الواجهة الرئيسية</Text>
-      <Text style={s.sub}>هنا أنت تتحكم في ما يظهر للعميل: اسم القسم، نوعه، وترتيبه والوجهة التي يفتحها. لا تحتاج لكتابة مسارات تقنية.</Text>
+      <Text style={s.sub}>هنا أنت تتحكم في ما يظهر للعميل: اسم القسم، صورته، نوعه، ترتيبه والوجهة التي يفتحها. لا تحتاج لكتابة مسارات تقنية؛ اختر مثلًا «قسم الصيدليات» وسيتم الفلترة تلقائيًا.</Text>
 
       <View style={s.card}>
         <Text style={s.section}>1. اختر شكل القسم</Text>
@@ -102,7 +106,8 @@ export default function Builder(){
         <Text style={s.section}>2. محتوى القسم</Text>
         <TextInput value={title} onChangeText={setTitle} placeholder="مثال: عروض اليوم" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={subtitle} onChangeText={setSubtitle} placeholder="وصف مختصر اختياري" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <TextInput value={button} onChangeText={setButton} placeholder="اسم الزر اختياري — مثال: شاهد الكل" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={button} onChangeText={setButton} placeholder="اسم الزر — مثال: عرض الصيدليات" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={itemImage} onChangeText={setItemImage} placeholder="رابط صورة للقسم (اختياري)" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
 
         <Text style={s.section}>3. عند الضغط يفتح</Text>
         <View style={s.destinations}>
@@ -110,7 +115,7 @@ export default function Builder(){
             <Text style={route===path?s.destinationTextOn:s.destinationText}>{label}</Text>
           </Pressable>)}
         </View>
-        <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}</Text>
+        <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}. مثال: لو اخترت «قسم الصيدليات» سيفتح العميل قائمة الجهات مفلترة على الصيدليات.</Text>
 
         <Pressable disabled={busy} onPress={add} style={[s.primary,busy&&{opacity:.6}]}><Text style={s.primaryText}>{busy?'جاري الحفظ...':'إضافة القسم إلى الرئيسية'}</Text></Pressable>
       </View>
@@ -123,7 +128,7 @@ export default function Builder(){
             <View style={s.order}><Text style={s.orderText}>{i+1}</Text></View>
             <View style={{flex:1}}><Text style={s.name}>{x.title||'بدون عنوان'}</Text><Text style={s.meta}>{x.section_type==='banner'?'بانر':x.section_type==='popup'?'نافذة':'قسم'} • {x.is_active?'ظاهر للعميل':'مخفي'}</Text></View>
           </View>
-          <Text style={s.meta}>الزر: {x.payload?.items?.[0]?.button||'فتح القسم'} • الوجهة: {DESTINATIONS.find(d=>d[2]===x.payload?.items?.[0]?.route)?.[1]||'وجهة مخصصة'}</Text>
+          <Text style={s.meta}>الزر: {x.payload?.items?.[0]?.button||'فتح القسم'} • الوجهة: {DESTINATIONS.find(d=>d[2]===x.payload?.items?.[0]?.route)?.[1]||'وجهة مخصصة'} • {x.payload?.items?.[0]?.image?'به صورة':'بدون صورة'}</Text>
           <View style={s.actions}>
             <Pressable onPress={()=>move(x,-1)} style={s.actionBtn}><Text style={s.actionText}>رفع ↑</Text></Pressable>
             <Pressable onPress={()=>move(x,1)} style={s.actionBtn}><Text style={s.actionText}>خفض ↓</Text></Pressable>
