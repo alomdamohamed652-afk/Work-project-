@@ -16,6 +16,7 @@ test('canonical order workflow exposes required lifecycle actions',()=>{
  const source=fs.readFileSync(path.join(root,'server/routes/order_workflow.js'),'utf8');
  for(const route of ['/:id/restaurant-decision','/:id/restaurant-status','/driver/available','/:id/claim','/:id/driver-status']) assert.equal(source.includes(route),true,route+' missing');
  assert.equal(source.includes('dispatchPreparingOrders'),true);
+ assert.equal(source.includes("هذا الطلب غير موجّه إليك"),true);
 });
 
 test('promotion referral migration is idempotent for reward cycles',()=>{
