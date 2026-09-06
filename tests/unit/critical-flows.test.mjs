@@ -94,3 +94,9 @@ test('fully paid order remains paid after adjustments', () => {
   assert.equal(paymentStatus(500, 500), 'paid');
   assert.equal(paymentStatus(400, 500), 'paid');
 });
+
+
+test('verified electronic payment plus cash remains partially paid, not paid', () => {
+  assert.equal(paymentStatus(100, 60), 'partially_paid');
+  assert.equal(paymentStatus(100, 0), 'cash_due');
+});
