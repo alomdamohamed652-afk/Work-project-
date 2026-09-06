@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import * as Location from "expo-location";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
-import { fonts } from "@/constants/fonts";
+import { fonts } from "@/constants/theme";
 
 export default function Onboarding() {
   const [busy, setBusy] = useState(false);
