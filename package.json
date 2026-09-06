@@ -10,7 +10,7 @@
     "start": "expo start",
     "server": "node server/index.js",
     "db:migrate": "node server/migrate.js",
-    "db:migrate:all": "node server/migrate.js && node server/migrate_customer.js && node server/migrate_marketing.js && node server/migrate_financials.js && node server/migrate_catalog.js && node server/migrate_media.js && node server/migrate_operations.js && node server/migrate_membership_v2.js && node server/migrate_operations_v3.js && node server/migrate_delivery_proof.js && node server/migrate_refunds.js && node server/migrate_payment_adjustments.js && node server/migrate_dispatch_flow.js && node server/migrate_order_item_adjustments.js && node server/migrate_account_settings.js && node server/migrate_ratings.js && node server/migrate_super_admin.js && node server/migrate_promotions_referrals.js && node server/migrate_marketplace.js && node server/migrate_special_orders.js",
+    "db:migrate:all": "node server/migrate.js && node server/migrate_customer.js && node server/migrate_marketing.js && node server/migrate_financials.js && node server/migrate_catalog.js && node server/migrate_media.js && node server/migrate_operations.js && node server/migrate_membership_v2.js && node server/migrate_operations_v3.js && node server/migrate_delivery_proof.js && node server/migrate_refunds.js && node server/migrate_payment_adjustments.js && node server/migrate_dispatch_flow.js && node server/migrate_order_item_adjustments.js && node server/migrate_account_settings.js && node server/migrate_ratings.js && node server/migrate_super_admin.js",
     "db:seed": "node server/seed.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
