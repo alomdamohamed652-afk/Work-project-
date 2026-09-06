@@ -77,15 +77,20 @@ const orderProofRoutes = require('./routes/order_proof');
 const ratingsRoutes = require('./routes/ratings');
 
 const app = express();
+// Basic readiness endpoint for Railway/load balancers. Database readiness is checked before startup.
+app.get('/ready', (_req,res)=>res.json({status:'ready'}));
 const port = Number(process.env.PORT || 3000);
 const allowedOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowOrigin=(origin)=>{ if(!origin)return true; if(!allowedOrigins.length)return !isProduction; return allowedOrigins.includes(origin); };
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin(origin, callback) { if (!origin) return callback(null, true); callback(null, allowedOrigins.includes(origin)); }, credentials: true }));
+app.use(cors({ origin(origin, callback) { if (allowOrigin(origin)) return callback(null, true); return callback(new Error('Origin not allowed by CORS')); }, credentials: true }));
 app.use(express.json({ limit: '8mb' }));
 app.use(auditMiddleware);
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false, message:{error:'طلبات كثيرة. حاول مرة أخرى بعد قليل.'} });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.' } });
+app.use('/api',apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register-customer', authLimiter);
 app.use('/api/auth/continue', authLimiter);
