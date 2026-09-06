@@ -59,7 +59,6 @@ const restaurantProfileRoutes = require('./routes/restaurant_profile');
 const menuRoutes = require('./routes/menu');
 const invitationRoutes = require('./routes/invitations');
 const locationRoutes = require('./routes/location');
-const orderWorkflowRoutes = require('./routes/order_workflow');
 const orderItemAdjustmentRoutes = require('./routes/order_item_adjustments');
 const customerOrderEditsRoutes = require('./routes/customer_order_edits');
 const orderRoutes = require('./routes/orders');
