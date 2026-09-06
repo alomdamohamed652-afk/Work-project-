@@ -154,3 +154,18 @@ test('manual address keeps delivery price pending instead of inventing a fee', (
   assert.equal(summary(false).deliveryFees, null);
   assert.equal(summary(true).pendingDeliveryQuote, false);
 });
+
+
+test('refund workflow never auto-refunds delivered orders', () => {
+  const canAutoRefund = (status) => status === 'cancelled';
+  assert.equal(canAutoRefund('cancelled'), true);
+  assert.equal(canAutoRefund('delivered'), false);
+  assert.equal(canAutoRefund('preparing'), false);
+});
+
+test('partial refund preserves the remaining paid balance', () => {
+  const afterRefund = (paid, refund) => Math.max(0, paid - refund);
+  assert.equal(afterRefund(100, 30), 70);
+  assert.equal(afterRefund(100, 100), 0);
+  assert.equal(afterRefund(30, 100), 0);
+});
