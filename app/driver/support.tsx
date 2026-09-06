@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { theme } from '@/constants/theme';
 
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
+const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');const msgTime=(v:any)=>{try{return new Intl.DateTimeFormat('ar-EG',{hour:'numeric',minute:'2-digit'}).format(new Date(v))}catch{return ''}};
 const readJson=async(r:Response)=>{const t=await r.text();try{return JSON.parse(t)}catch{return {error:'تعذر قراءة رد الخادم'}}};
 const categories=[['general','استفسار عام','💬'],['delivery','مشكلة أثناء التوصيل','🚚'],['payment','مشكلة مالية أو تسوية','💳'],['call','طلب التواصل مع الإدارة','📞'],['complaint','شكوى','📝']];
 
