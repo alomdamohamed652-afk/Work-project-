@@ -19,6 +19,7 @@ export default function Audit() {
   const [role, setRole] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expanded,setExpanded]=useState<string|null>(null);
 
   const headers = async () => ({ Authorization: `Bearer ${await AsyncStorage.getItem('auth_token')}` });
 
@@ -88,12 +89,16 @@ export default function Audit() {
 
       {loading ? <View style={s.loading}><ActivityIndicator color={theme.primary} /><Text style={s.sub}>جاري التحميل...</Text></View> : null}
       {!loading && role === 'super_admin' && !logs.length && !error ? <Text style={s.empty}>لا توجد سجلات مطابقة حاليًا.</Text> : null}
-      {logs.map(x => <View key={x.id} style={s.log}>
-        <Text style={s.action}>{x.action}</Text>
-        <Text style={s.meta}>{x.actor_name || 'System'} • {x.actor_phone || ''}</Text>
-        <Text style={s.meta}>{x.module} • {x.entity_id || '-'}</Text>
+      {logs.map(x => <Pressable key={x.id} onPress={()=>setExpanded(expanded===x.id?null:x.id)} style={s.log}>
+        <View style={s.logHead}><Text style={s.chev}>{expanded===x.id?'⌃':'⌄'}</Text><Text style={s.action}>{x.action}</Text></View>
+        <Text style={s.meta}>المنفذ: {x.actor_name || 'System'} {x.actor_phone?'• '+x.actor_phone:''}</Text>
+        <Text style={s.meta}>الموديول: {x.module||'غير محدد'} • النوع: {x.entity_type||'-'} • ID: {x.entity_id || '-'}</Text>
         <Text style={s.time}>{new Date(x.created_at).toLocaleString('ar-EG')}</Text>
-      </View>)}
+        {expanded===x.id?<View style={s.details}>
+          {x.path?<Text style={s.detail}>المسار: {x.path}</Text>:null}
+          <Text style={s.detail}>التفاصيل: {x.metadata&&Object.keys(x.metadata).length?JSON.stringify(x.metadata,null,2):'لا توجد تفاصيل إضافية مسجلة'}</Text>
+        </View>:null}
+      </Pressable>)}
     </ScrollView>
   </SafeAreaView>;
 }
@@ -110,5 +115,5 @@ const s = StyleSheet.create({
   danger:{flex:1,height:44,borderRadius:12,backgroundColor:theme.dangerSoft,alignItems:'center',justifyContent:'center'},dangerText:{color:theme.danger,fontWeight:'900'},
   errorBox:{backgroundColor:theme.dangerSoft,borderRadius:14,padding:11,marginTop:10},error:{color:theme.danger,textAlign:'right',fontSize:11},
   loading:{alignItems:'center',paddingVertical:35,gap:8},empty:{color:theme.muted,textAlign:'center',paddingVertical:30},
-  log:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginTop:7},action:{color:theme.text,fontWeight:'900',textAlign:'right'},meta:{color:theme.muted,fontSize:10,textAlign:'right',marginTop:4},time:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:6},
+  log:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginTop:7},logHead:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},chev:{color:theme.primary,fontSize:16},action:{color:theme.text,fontWeight:'900',textAlign:'right',flex:1},meta:{color:theme.muted,fontSize:10,textAlign:'right',marginTop:4},time:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:6},details:{marginTop:9,padding:10,borderRadius:11,backgroundColor:theme.background},detail:{color:theme.text,fontSize:9,lineHeight:16,textAlign:'right},
 });
