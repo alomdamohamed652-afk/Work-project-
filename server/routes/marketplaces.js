@@ -57,6 +57,11 @@ router.patch('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{
 
 router.delete('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{try{const {rows}=await pool.query('DELETE FROM marketplace_subcategories WHERE id=$1 RETURNING id',[req.params.id]);if(!rows[0])return res.status(404).json({error:'التصنيف غير موجود'});res.json({ok:true})}catch(e){next(e)}});
 
+router.get('/restaurant/options',requireAuth,requireRole('restaurant'),async(req,res,next)=>{try{
+ const profile=await pool.query('SELECT marketplace_id FROM restaurant_profiles WHERE restaurant_id=$1',[req.user.id]);const marketplaceId=profile.rows[0]?.marketplace_id||null;if(!marketplaceId)return res.json({marketplace:null,categories:[],subcategories:[]});
+ const [m,c,s]=await Promise.all([pool.query('SELECT id,name,icon FROM marketplaces WHERE id=$1 AND is_active=true',[marketplaceId]),pool.query('SELECT id,name,icon FROM marketplace_categories WHERE marketplace_id=$1 AND is_active=true ORDER BY sort_order,name',[marketplaceId]),pool.query('SELECT s.* FROM marketplace_subcategories s JOIN marketplace_categories c ON c.id=s.category_id WHERE c.marketplace_id=$1 AND s.is_active=true ORDER BY s.sort_order,s.name',[marketplaceId])]);res.json({marketplace:m.rows[0]||null,categories:c.rows,subcategories:s.rows});
+}catch(e){next(e)}});
+
 router.get('/:idOrSlug',requireAuth,requireRole('customer'),async(req,res,next)=>{try{
   const q=String(req.params.idOrSlug);
   const {rows}=await pool.query(`SELECT * FROM marketplaces WHERE is_active=true AND (id::text=$1 OR slug=$1) LIMIT 1`,[q]);
