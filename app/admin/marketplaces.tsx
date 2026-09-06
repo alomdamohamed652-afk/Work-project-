@@ -4,7 +4,7 @@ import {ActivityIndicator,Pressable,ScrollView,StyleSheet,Text,TextInput,View}fr
 import {SafeAreaView}from'react-native-safe-area-context';
 import {router}from'expo-router';
 import {theme}from'@/constants/theme';
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\\/$/,'');
+const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 const layouts=[['horizontal','صف قابل للسحب'],['grid','شبكة Grid'],['single','بطاقة واحدة']] as const;
 export default function Marketplaces(){
  const [list,setList]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[subs,setSubs]=useState<any[]>([]);
