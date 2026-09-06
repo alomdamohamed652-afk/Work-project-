@@ -27,7 +27,7 @@ router.post('/admin/all',requireAuth,admin,async(req,res,next)=>{try{
 
 router.patch('/admin/all/:id',requireAuth,admin,async(req,res,next)=>{try{
   const b=req.body||{};
-  const {rows}=await pool.query(`UPDATE marketplaces SET slug=COALESCE($2,slug),name=COALESCE($3,name),description=$4,icon=$5,image_url=$6,is_active=COALESCE($7,is_active),show_on_home=COALESCE($8,show_on_home),show_in_search=COALESCE($9,show_in_search),show_categories=COALESCE($10,show_categories),display_layout=COALESCE($11,display_layout),sort_order=COALESCE($12,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.slug?slugify(b.slug):null,b.name?String(b.name).trim():null,b.description===undefined?null:(b.description||null),b.icon===undefined?null:(b.icon||null),b.imageUrl===undefined?null:(b.imageUrl||null),b.isActive===undefined?null:Boolean(b.isActive),b.showOnHome===undefined?null:Boolean(b.showOnHome),b.showInSearch===undefined?null:Boolean(b.showInSearch),b.showCategories===undefined?null:Boolean(b.showCategories),b.displayLayout&&['horizontal','grid','single'].includes(b.displayLayout)?b.displayLayout:null,b.sortOrder===undefined?null:Number(b.sortOrder)]);
+  const {rows}=await pool.query(`UPDATE marketplaces SET slug=COALESCE($2,slug),name=COALESCE($3,name),description=COALESCE($4,description),icon=COALESCE($5,icon),image_url=COALESCE($6,image_url),is_active=COALESCE($7,is_active),show_on_home=COALESCE($8,show_on_home),show_in_search=COALESCE($9,show_in_search),show_categories=COALESCE($10,show_categories),display_layout=COALESCE($11,display_layout),sort_order=COALESCE($12,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.slug?slugify(b.slug):null,b.name?String(b.name).trim():null,b.description===undefined?null:(b.description||null),b.icon===undefined?null:(b.icon||null),b.imageUrl===undefined?null:(b.imageUrl||null),b.isActive===undefined?null:Boolean(b.isActive),b.showOnHome===undefined?null:Boolean(b.showOnHome),b.showInSearch===undefined?null:Boolean(b.showInSearch),b.showCategories===undefined?null:Boolean(b.showCategories),b.displayLayout&&['horizontal','grid','single'].includes(b.displayLayout)?b.displayLayout:null,b.sortOrder===undefined?null:Number(b.sortOrder)]);
   if(!rows[0])return res.status(404).json({error:'القسم غير موجود'});res.json({marketplace:rows[0]});
 }catch(e){next(e)}});
 
@@ -38,7 +38,7 @@ router.post('/admin/all/:id/categories',requireAuth,admin,async(req,res,next)=>{
 }catch(e){next(e)}});
 
 router.patch('/admin/categories/:id',requireAuth,admin,async(req,res,next)=>{try{
-  const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_categories SET name=COALESCE($2,name),description=$3,image_url=$4,icon=$5,is_active=COALESCE($6,is_active),sort_order=COALESCE($7,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.description===undefined?null:(b.description||null),b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
+  const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_categories SET name=COALESCE($2,name),description=COALESCE($3,description),image_url=COALESCE($4,image_url),icon=COALESCE($5,icon),is_active=COALESCE($6,is_active),sort_order=COALESCE($7,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.description===undefined?null:(b.description||null),b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
   if(!rows[0])return res.status(404).json({error:'القسم غير موجود'});res.json({category:rows[0]});
 }catch(e){next(e)}});
 
@@ -49,7 +49,7 @@ router.post('/admin/categories/:id/subcategories',requireAuth,admin,async(req,re
 }catch(e){next(e)}});
 
 router.patch('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{try{
-  const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_subcategories SET name=COALESCE($2,name),image_url=$3,icon=$4,is_active=COALESCE($5,is_active),sort_order=COALESCE($6,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
+  const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_subcategories SET name=COALESCE($2,name),image_url=COALESCE($3,image_url),icon=COALESCE($4,icon),is_active=COALESCE($5,is_active),sort_order=COALESCE($6,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
   if(!rows[0])return res.status(404).json({error:'التصنيف غير موجود'});res.json({subcategory:rows[0]});
 }catch(e){next(e)}});
 
