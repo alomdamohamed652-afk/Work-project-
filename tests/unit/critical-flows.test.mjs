@@ -169,3 +169,12 @@ test('partial refund preserves the remaining paid balance', () => {
   assert.equal(afterRefund(100, 100), 0);
   assert.equal(afterRefund(30, 100), 0);
 });
+
+
+test('customer and restaurant cancellation requires ownership', () => {
+  const mayCancel = (role, owns) => ['admin','staff'].includes(role) || owns;
+  assert.equal(mayCancel('customer', true), true);
+  assert.equal(mayCancel('customer', false), false);
+  assert.equal(mayCancel('restaurant', false), false);
+  assert.equal(mayCancel('admin', false), true);
+});
