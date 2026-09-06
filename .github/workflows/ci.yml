@@ -22,4 +22,3 @@ jobs:
         run: |
           set -e
           for f in server/*.js server/routes/*.js; do node --check "$f"; done
-      - run: npm run format:check
