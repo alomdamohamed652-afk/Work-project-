@@ -61,14 +61,17 @@ test('customer -> admin -> restaurant -> driver -> delivery -> rating', { skip: 
   const admin = await login(adminPhone, adminPassword);
   const restaurant = await login(restaurantPhone, restaurantPassword);
   const driver = await login(driverPhone, driverPassword);
-  const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, deliveryAddress: 'E2E Test Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
+  const checkout = await request('/api/orders/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, deliveryAddress: 'E2E Test Address', deliveryLatitude: 30.0444, deliveryLongitude: 31.2357, orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
   assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
   const orderId = checkout.body.orders?.[0]?.id;
   const itemId = checkout.body.orders?.[0]?.items?.[0]?.id;
   assert.ok(orderId); assert.ok(itemId);
   const adminDecision = await request(`/api/orders/${orderId}/admin-decision`, { method: 'PATCH', headers: auth(admin.token), body: JSON.stringify({ approve: true }) });
   assert.equal(adminDecision.response.status, 200, JSON.stringify(adminDecision.body));
-  assert.equal(adminDecision.body.order.status, 'preparing');
+  assert.equal(adminDecision.body.order.status, 'confirmed');
+  const restaurantPreparing = await request(`/api/orders/${orderId}/restaurant-status`, { method: 'PATCH', headers: auth(restaurant.token), body: JSON.stringify({ status: 'preparing' }) });
+  assert.equal(restaurantPreparing.response.status, 200, JSON.stringify(restaurantPreparing.body));
+  assert.equal(restaurantPreparing.body.order.status, 'preparing');
   const quantityEdit = await request(`/api/customer/orders/${orderId}/items/${itemId}`, { method: 'PATCH', headers: auth(customer.token), body: JSON.stringify({ quantity: 2 }) });
   assert.equal(quantityEdit.response.status, 200, JSON.stringify(quantityEdit.body));
   const restaurantReady = await request(`/api/orders/${orderId}/restaurant-status`, { method: 'PATCH', headers: auth(restaurant.token), body: JSON.stringify({ status: 'ready' }) });
@@ -95,7 +98,7 @@ test('unavailable item -> customer replacement -> restaurant ready', { skip: !re
   const customer = await login(customerPhone, customerPassword);
   const admin = await login(adminPhone, adminPassword);
   const restaurant = await login(restaurantPhone, restaurantPassword);
-  const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-replace-${Date.now()}`, deliveryAddress: 'E2E Replacement Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
+  const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-replace-${Date.now()}`, deliveryAddress: 'E2E Replacement Address', deliveryLatitude: 30.0444, deliveryLongitude: 31.2357, orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
   assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
   const orderId = checkout.body.orders?.[0]?.id;
   const itemId = checkout.body.orders?.[0]?.items?.[0]?.id;
@@ -114,7 +117,7 @@ test('unavailable item -> customer replacement -> restaurant ready', { skip: !re
 
 test('multi-restaurant checkout creates one order per restaurant', { skip: !multiConfigured }, async () => {
   const customer = await login(customerPhone, customerPassword);
-  const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-multi-${Date.now()}`, deliveryAddress: 'E2E Multi Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }, { restaurantId: secondRestaurantId, items: [{ menuItemId: secondMenuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
+  const checkout = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-multi-${Date.now()}`, deliveryAddress: 'E2E Multi Address', deliveryLatitude: 30.0444, deliveryLongitude: 31.2357, orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }, { restaurantId: secondRestaurantId, items: [{ menuItemId: secondMenuItemId, quantity: 1 }] }], paymentMethod: 'cash' }) });
   assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
   assert.equal(checkout.body.orders.length, 2);
   assert.equal(checkout.body.checkout.restaurants_count, 2);
@@ -123,7 +126,7 @@ test('multi-restaurant checkout creates one order per restaurant', { skip: !mult
 
 test('electronic payment cannot bypass transfer proof', { skip: !configured }, async () => {
   const customer = await login(customerPhone, customerPassword);
-  const response = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-payment-${Date.now()}`, deliveryAddress: 'E2E Payment Address', orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'instapay' }) });
+  const response = await request('/api/checkout/bulk', { method: 'POST', headers: auth(customer.token), body: JSON.stringify({ idempotencyKey: `e2e-payment-${Date.now()}`, deliveryAddress: 'E2E Payment Address', deliveryLatitude: 30.0444, deliveryLongitude: 31.2357, orders: [{ restaurantId, items: [{ menuItemId, quantity: 1 }] }], paymentMethod: 'instapay' }) });
   assert.equal(response.response.status, 400);
   assert.match(String(response.body?.error || ''), /صورة التحويل/);
 });
