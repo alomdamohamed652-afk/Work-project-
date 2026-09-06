@@ -14,7 +14,7 @@ async function recalcOrder(c,orderId){
  const {rows:s}=await c.query(`SELECT COALESCE(SUM(CASE WHEN availability_status IN ('available','replacement_selected') THEN line_total ELSE 0 END),0) subtotal FROM order_items WHERE order_id=$1`,[orderId]);
  const subtotal=money(s[0].subtotal),delivery=money(o.delivery_fee),discount=money(o.discount_amount),fee=money(o.admin_fee),total=money(Math.max(0,subtotal+delivery+fee-discount));
  const paid=money(o.paid_amount),cashDue=money(Math.max(0,total-paid));
- const paymentStatus=total<=0||paid+cashDue>=total-0.01?'paid':paid>0||cashDue>0?'partially_paid':o.payment_status;
+ const paymentStatus=total<=0?'paid':paid>=total-0.01?'paid':paid>0?'partially_paid':cashDue>0?'cash_due':'pending';
  const note=paid>total+0.01?`يوجد مبلغ زائد ${money(paid-total).toFixed(2)} ج.م يحتاج مراجعة/استرداد بعد تعديل الطلب.`:o.admin_adjustment_note;
  const {rows}=await c.query(`UPDATE orders SET subtotal=$1,total_amount=$2,cash_due=$3,payment_status=$4,admin_adjustment_note=$5,updated_at=now() WHERE id=$6 RETURNING *`,[subtotal,total,cashDue,paymentStatus,note,orderId]);
  if(o.checkout_id){
@@ -22,7 +22,7 @@ async function recalcOrder(c,orderId){
   const x=sums.rows[0];
   const checkout=await c.query(`SELECT paid_amount FROM checkout_sessions WHERE id=$1 FOR UPDATE`,[o.checkout_id]);
   const checkoutPaid=money(checkout.rows[0]?.paid_amount),checkoutTotal=money(x.total),checkoutCash=money(Math.max(0,checkoutTotal-checkoutPaid));
-  const checkoutStatus=checkoutTotal<=0||checkoutPaid+checkoutCash>=checkoutTotal-0.01?'paid':checkoutPaid>0||checkoutCash>0?'partially_paid':'pending';
+  const checkoutStatus=checkoutTotal<=0?'paid':checkoutPaid>=checkoutTotal-0.01?'paid':checkoutPaid>0?'partially_paid':checkoutCash>0?'cash_due':'pending';
   await c.query(`UPDATE checkout_sessions SET subtotal=$1,delivery_fee=$2,admin_fee=$3,discount_amount=$4,total_amount=$5,cash_due=$6,payment_status=$7,updated_at=now() WHERE id=$8`,[money(x.subtotal),money(x.delivery_fee),money(x.admin_fee),money(x.discount_amount),checkoutTotal,checkoutCash,checkoutStatus,o.checkout_id]);
  }
  return rows[0];
