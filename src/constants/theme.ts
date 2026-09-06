@@ -19,3 +19,5 @@ export const theme={
   infoSoft:"#EFF8FF",
   overlay:"rgba(15,23,42,.45)"
 } as const;
+
+export const fonts={size:{xs:10,sm:11,md:13,lg:16,xl:20},weight:{regular:'400',medium:'500',bold:'700',heavy:'900'}} as const;
