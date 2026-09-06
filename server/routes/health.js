@@ -1,1 +1,38 @@
-const express=require("express");const router=express.Router();const {pool}=require("../db");router.get("/",async(_req,res)=>{try{const result=await pool.query(`SELECT NOW() AS database_time,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('customer_wallets','wallet_transactions','order_payments','driver_ledger_entries')) AS financial_tables`);const financialTables=Number(result.rows[0].financial_tables);res.status(financialTables===4?200:503).json({ok:true,database:"connected",databaseTime:result.rows[0].database_time,financialSchema:financialTables===4?"ready":"migration_required",financialTables})}catch(error){console.error(error);res.status(503).json({ok:false,database:"disconnected"})}});module.exports=router;
+const express = require('express');
+const router = express.Router();
+const { pool } = require('../db');
+
+router.get('/live', (_req, res) => {
+  res.json({ ok: true, status: 'alive' });
+});
+
+router.get('/', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        NOW() AS database_time,
+        (SELECT COUNT(*) FROM information_schema.tables
+          WHERE table_schema='public'
+            AND table_name IN (
+              'users','orders','customer_wallets','wallet_transactions',
+              'order_payments','driver_ledger_entries','home_sections','promo_banners'
+            )
+        ) AS required_tables
+    `);
+    const requiredTables = Number(result.rows[0].required_tables);
+    const ready = requiredTables === 8;
+    res.status(ready ? 200 : 503).json({
+      ok: ready,
+      status: ready ? 'ready' : 'migration_required',
+      database: 'connected',
+      databaseTime: result.rows[0].database_time,
+      requiredTables,
+      expectedTables: 8,
+    });
+  } catch (error) {
+    console.error('Health check failed:', error.message);
+    res.status(503).json({ ok: false, status: 'database_unavailable', database: 'disconnected' });
+  }
+});
+
+module.exports = router;

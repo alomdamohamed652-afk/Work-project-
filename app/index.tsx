@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
-import { fonts } from "@/constants/fonts";
+import { fonts } from "@/constants/theme";
 
 export default function Landing() {
   return (
