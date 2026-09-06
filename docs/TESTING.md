@@ -41,6 +41,7 @@ E2E_RESTAURANT_ID
 9. Cash delivery → `delivered`.
 10. Customer restaurant/driver rating.
 11. Duplicate rating rejection.
+12. Support conversation: sender identity and timestamp are returned with every message.
 
 ## Release-gate scenarios
 
@@ -80,6 +81,12 @@ These are intentionally separated from the smoke test because they require dispo
 - Valid delivery PIN succeeds; wrong PIN is rejected and attempts are limited.
 - Delivery photo accepts supported image types within the size limit.
 - Cash order can complete through the cash delivery path.
+
+### Support chat
+- Customer/driver opens a conversation and sends a message.
+- Admin/staff reply shows the actual account full name under the message.
+- Every message shows a readable send time.
+- Role boundaries prevent users from reading another user's conversation.
 
 ### GPS / notifications
 - Foreground GPS updates while app is open.
