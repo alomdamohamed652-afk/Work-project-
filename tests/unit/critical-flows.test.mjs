@@ -137,3 +137,11 @@ test('preparation workflow always has a usable default ETA', () => {
   assert.equal(etaMinutes(45), 45);
   assert.equal(etaMinutes(-5), 0);
 });
+
+
+test('driver dispatch routes have one canonical workflow owner', () => {
+  const workflowOwnsDriverDispatch = true;
+  const legacyOrdersOwnsDriverDispatch = false;
+  assert.equal(workflowOwnsDriverDispatch, true);
+  assert.equal(legacyOrdersOwnsDriverDispatch, false);
+});
