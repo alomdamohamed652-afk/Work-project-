@@ -1,9 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
+import { apiJson } from '@/src/lib/api';
 
 const API = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
 const readJson = async (r: Response) => { const text = await r.text(); try { return JSON.parse(text); } catch { return { error: 'تعذر قراءة رد الخادم' }; } };
@@ -16,15 +16,10 @@ export default function Operations() {
   const load = async () => {
     try {
       setError('');
-      const t = await AsyncStorage.getItem('auth_token');
-      const h = { Authorization: `Bearer ${t}` };
-      const [r, tier] = await Promise.all([
-        fetch(API + '/api/operations/admin/home', { headers: h }),
-        fetch(API + '/api/operations/admin/tiers', { headers: h }),
+      const [a,b] = await Promise.all([
+        apiJson('/api/operations/admin/home'),
+        apiJson('/api/operations/admin/tiers'),
       ]);
-      const a = await readJson(r), b = await readJson(tier);
-      if (!r.ok) throw new Error(a.error || 'تعذر تحميل إعدادات الواجهة');
-      if (!tier.ok) throw new Error(b.error || 'تعذر تحميل الفئات');
       setData({ flags: a.flags || [], tiers: b.tiers || [] });
     } catch (e) { setError(e instanceof Error ? e.message : 'تعذر تحميل الإعدادات'); }
   };
@@ -34,14 +29,11 @@ export default function Operations() {
   const toggle = async (f: any) => {
     setBusy(true);
     try {
-      const t = await AsyncStorage.getItem('auth_token');
-      const r = await fetch(API + '/api/operations/admin/home/flags/' + encodeURIComponent(f.key), {
+      await apiJson('/api/operations/admin/home/flags/' + encodeURIComponent(f.key), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !f.is_enabled, config: f.config }),
       });
-      const d = await readJson(r);
-      if (!r.ok) throw new Error(d.error || 'تعذر الحفظ');
       load();
     } catch (e) { Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذر الحفظ'); }
     finally { setBusy(false); }
