@@ -13,7 +13,7 @@ export default function Locations() {
   const [centerName, setCenterName] = useState('');
   const [editingGov, setEditingGov] = useState<any>(null);
   const [editingCenter, setEditingCenter] = useState<any>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null); const [areaName,setAreaName]=useState(''); const [officeId,setOfficeId]=useState(''); const [areaLat,setAreaLat]=useState(''); const [areaLon,setAreaLon]=useState(''); const [radius,setRadius]=useState('');
 
   const token = () => AsyncStorage.getItem('auth_token');
 
@@ -33,6 +33,8 @@ export default function Locations() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const saveArea=async()=>{if(!officeId||!areaName.trim()||!areaLat||!areaLon||!radius)return Alert.alert('تنبيه','اختار مكتب واكتب اسم المنطقة والإحداثيات ونطاق الخدمة');try{const t=await token();const r=await fetch(API+'/api/operations/admin/offices/'+officeId+'/areas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({name:areaName.trim(),centerLatitude:Number(areaLat),centerLongitude:Number(areaLon),radiusMeters:Number(radius)})});if(!r.ok)return Alert.alert('خطأ',await readError(r));setAreaName('');setAreaLat('');setAreaLon('');setRadius('');load()}catch(e){Alert.alert('خطأ','تعذر حفظ نطاق الخدمة')}};
 
   const saveGovernorate = async () => {
     if (!govName.trim()) return Alert.alert('تنبيه', 'اكتب اسم المحافظة');
@@ -113,6 +115,19 @@ export default function Locations() {
           </View>
         </View>
 
+        <Text style={s.section}>نطاق التوصيل المسموح</Text>
+        <View style={s.card}>
+          <Text style={s.sub}>لو لم تضف أي نطاق فلن يتم رفض العميل بسبب موقعه. بعد إضافة نطاق، يتم التحقق من GPS داخل دائرة الخدمة.</Text>
+          <Text style={s.label}>المكتب</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{(data.offices||[]).map((o:any)=><Pressable key={o.id} onPress={()=>setOfficeId(o.id)} style={[s.chip,officeId===o.id&&s.on]}><Text style={officeId===o.id?s.onText:s.chipText}>{o.name}</Text></Pressable>)}</ScrollView>
+          {!data.offices?.length&&<Text style={s.warning}>أضف مكتب تشغيل أولًا من إدارة العمليات.</Text>}
+          <TextInput value={areaName} onChangeText={setAreaName} placeholder="اسم النطاق: وسط بنها" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+          <TextInput value={areaLat} onChangeText={setAreaLat} placeholder="Latitude مثال: 30.466" keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+          <TextInput value={areaLon} onChangeText={setAreaLon} placeholder="Longitude مثال: 31.184" keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+          <TextInput value={radius} onChangeText={setRadius} placeholder="نصف القطر بالمتر: 5000" keyboardType="numeric" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+          <Pressable onPress={saveArea} style={s.primary}><Text style={s.primaryText}>إضافة نطاق الخدمة</Text></Pressable>
+          {(data.officeAreas||[]).map((a:any)=><View key={a.id} style={s.areaRow}><Text style={s.meta}>{a.name} • {a.radius_meters} متر</Text></View>)}
+        </View>
         <Text style={s.section}>التنظيم الإداري</Text>
         {data.governorates.map((g: any) => {
           const centers = data.centers.filter((c: any) => c.governorate_id === g.id);
@@ -184,5 +199,5 @@ const s = StyleSheet.create({
   smallButton:{paddingHorizontal:10,paddingVertical:7,borderRadius:10,backgroundColor:theme.background}, stopText:{color:theme.warning,fontSize:10,fontWeight:'900'}, enableText:{color:theme.success,fontSize:10,fontWeight:'900'}, editText:{color:theme.primary,fontSize:10,fontWeight:'900'}, deleteText:{color:theme.danger,fontSize:10,fontWeight:'900'},
   centersBox:{borderTopWidth:1,borderTopColor:theme.border,backgroundColor:theme.background,padding:12}, centersTitle:{color:theme.text,fontWeight:'900',textAlign:'right',marginBottom:8},
   centerRow:{flexDirection:'row-reverse',alignItems:'center',paddingVertical:10,borderBottomWidth:1,borderBottomColor:theme.border,gap:8}, centerName:{color:theme.text,textAlign:'right',fontWeight:'800'},
-  centerActions:{flexDirection:'row',gap:10}, addCenter:{marginTop:10,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:14,padding:11},
+  centerActions:{flexDirection:'row',gap:10}, chips:{gap:7,flexDirection:'row-reverse',paddingVertical:6},chip:{paddingHorizontal:11,paddingVertical:8,borderRadius:12,borderWidth:1,borderColor:theme.border,backgroundColor:theme.background},chipText:{color:theme.text,fontSize:10,fontWeight:'800'},on:{backgroundColor:theme.primary,borderColor:theme.primary},onText:{color:'#fff',fontSize:10,fontWeight:'900'},warning:{color:theme.warning,textAlign:'right',fontSize:10,marginBottom:8},areaRow:{padding:9,borderTopWidth:1,borderTopColor:theme.border}, addCenter:{marginTop:10,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:14,padding:11},
 });
