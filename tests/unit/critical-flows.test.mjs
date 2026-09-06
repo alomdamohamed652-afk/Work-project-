@@ -67,3 +67,30 @@ test('electronic payment requires transfer proof and split payments must balance
     { method: 'instapay', amount: 30, receiptBase64: 'proof' },
   ]), 'split_total_mismatch');
 });
+
+
+function paymentStatus(total, paid) {
+  const t = Math.max(0, Number(total || 0));
+  const p = Math.max(0, Number(paid || 0));
+  const cashDue = Math.max(0, t - p);
+  if (t <= 0) return 'paid';
+  if (p >= t - 0.01) return 'paid';
+  if (p > 0) return 'partially_paid';
+  if (cashDue > 0) return 'cash_due';
+  return 'pending';
+}
+
+test('COD stays cash_due after order price adjustments', () => {
+  assert.equal(paymentStatus(500, 0), 'cash_due');
+  assert.equal(paymentStatus(350, 0), 'cash_due');
+});
+
+test('partial wallet payment stays partially_paid after adjustments', () => {
+  assert.equal(paymentStatus(500, 100), 'partially_paid');
+  assert.equal(paymentStatus(80, 100), 'paid');
+});
+
+test('fully paid order remains paid after adjustments', () => {
+  assert.equal(paymentStatus(500, 500), 'paid');
+  assert.equal(paymentStatus(400, 500), 'paid');
+});
