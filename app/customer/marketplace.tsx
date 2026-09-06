@@ -4,7 +4,7 @@ import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View}from'r
 import {SafeAreaView}from'react-native-safe-area-context';
 import {router,useLocalSearchParams}from'expo-router';
 import {theme}from'@/constants/theme';
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\\/$/,'');
+const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 export default function Marketplace(){
  const {id}=useLocalSearchParams<{id:string}>();const [data,setData]=useState<any>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  useEffect(()=>{(async()=>{try{const t=await AsyncStorage.getItem('auth_token'),r=await fetch(API+'/api/marketplaces/'+id,{headers:{Authorization:'Bearer '+t}}),d=await r.json();if(!r.ok)throw Error(d.error||'تعذر تحميل القسم');setData(d)}catch(e){setError(e instanceof Error?e.message:'تعذر التحميل')}finally{setLoading(false)}})()},[id]);
