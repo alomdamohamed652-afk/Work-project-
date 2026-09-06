@@ -11,15 +11,6 @@ router.get('/',requireAuth,requireRole('customer'),async(_req,res,next)=>{try{
   res.json({marketplaces:rows});
 }catch(e){next(e)}});
 
-router.get('/:idOrSlug',requireAuth,requireRole('customer'),async(req,res,next)=>{try{
-  const q=String(req.params.idOrSlug);
-  const {rows}=await pool.query(`SELECT * FROM marketplaces WHERE is_active=true AND (id::text=$1 OR slug=$1) LIMIT 1`,[q]);
-  const marketplace=rows[0];if(!marketplace)return res.status(404).json({error:'القسم غير موجود'});
-  const cats=await pool.query(`SELECT c.*,COALESCE((SELECT json_agg(s ORDER BY s.sort_order,s.created_at) FROM (SELECT id,name,image_url,icon,sort_order FROM marketplace_subcategories WHERE category_id=c.id AND is_active=true ORDER BY sort_order,created_at)s),'[]'::json) subcategories FROM marketplace_categories c WHERE c.marketplace_id=$1 AND c.is_active=true ORDER BY c.sort_order,c.created_at`,[marketplace.id]);
-  const merchants=await pool.query(`SELECT u.id,COALESCE(rp.display_name,u.full_name) name,rp.logo_url,rp.is_open,rp.preparation_minutes FROM restaurant_profiles rp JOIN users u ON u.id=rp.restaurant_id WHERE rp.marketplace_id=$1 AND u.status='active' AND u.role='restaurant' ORDER BY rp.is_featured DESC,name LIMIT 100`,[marketplace.id]);
-  res.json({marketplace,categories:marketplace.show_categories?cats.rows:[],merchants:merchants.rows});
-}catch(e){next(e)}});
-
 router.get('/admin/all/list',requireAuth,admin,async(_req,res,next)=>{try{
   const m=await pool.query('SELECT * FROM marketplaces ORDER BY sort_order,created_at');
   const c=await pool.query('SELECT * FROM marketplace_categories ORDER BY marketplace_id,sort_order,created_at');
@@ -61,5 +52,15 @@ router.patch('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{
   const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_subcategories SET name=COALESCE($2,name),image_url=$3,icon=$4,is_active=COALESCE($5,is_active),sort_order=COALESCE($6,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
   if(!rows[0])return res.status(404).json({error:'التصنيف غير موجود'});res.json({subcategory:rows[0]});
 }catch(e){next(e)}});
+
+router.get('/:idOrSlug',requireAuth,requireRole('customer'),async(req,res,next)=>{try{
+  const q=String(req.params.idOrSlug);
+  const {rows}=await pool.query(`SELECT * FROM marketplaces WHERE is_active=true AND (id::text=$1 OR slug=$1) LIMIT 1`,[q]);
+  const marketplace=rows[0];if(!marketplace)return res.status(404).json({error:'القسم غير موجود'});
+  const cats=await pool.query(`SELECT c.*,COALESCE((SELECT json_agg(s ORDER BY s.sort_order,s.created_at) FROM (SELECT id,name,image_url,icon,sort_order FROM marketplace_subcategories WHERE category_id=c.id AND is_active=true ORDER BY sort_order,created_at)s),'[]'::json) subcategories FROM marketplace_categories c WHERE c.marketplace_id=$1 AND c.is_active=true ORDER BY c.sort_order,c.created_at`,[marketplace.id]);
+  const merchants=await pool.query(`SELECT u.id,COALESCE(rp.display_name,u.full_name) name,rp.logo_url,rp.is_open,rp.preparation_minutes FROM restaurant_profiles rp JOIN users u ON u.id=rp.restaurant_id WHERE rp.marketplace_id=$1 AND u.status='active' AND u.role='restaurant' ORDER BY rp.is_featured DESC,name LIMIT 100`,[marketplace.id]);
+  res.json({marketplace,categories:marketplace.show_categories?cats.rows:[],merchants:merchants.rows});
+}catch(e){next(e)}});
+
 
 module.exports=router;
