@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS referrals(
  rejected_reason TEXT,
  rewarded_at TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals(referrer_id,status,created_at DESC);
+CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals(referrer_id,status,created_at DESC);CREATE TABLE IF NOT EXISTS referral_reward_grants(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,reward_type TEXT NOT NULL, reward_value NUMERIC(12,2) NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','used','expired','blocked')),checkout_id UUID REFERENCES checkout_sessions(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),used_at TIMESTAMPTZ);CREATE INDEX IF NOT EXISTS referral_reward_grants_user_idx ON referral_reward_grants(user_id,status,created_at DESC);
 INSERT INTO platform_settings(key,value) VALUES
  ('promotion.first_order.enabled','true'),
  ('promotion.first_order.name','أول طلب شحن مجاني'),
