@@ -1,13 +1,16 @@
 const { pool } = require("./db");
 
-async function main() {
+async function migrateSuperAdmin() {
   await pool.query(`
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','driver','restaurant','staff','admin','super_admin'));
   `);
 
-  const primaryPhone = String(process.env.PRIMARY_ADMIN_PHONE || "").replace(/[\s-]/g, "");
-  if (!primaryPhone) throw new Error("PRIMARY_ADMIN_PHONE is not configured");
+  const primaryPhone = String(process.env.PRIMARY_ADMIN_PHONE || "").replace(/[\\s-]/g, "");
+  if (!primaryPhone) {
+    console.warn("PRIMARY_ADMIN_PHONE is not configured; role constraint was updated but no bootstrap super admin was changed.");
+    return null;
+  }
 
   const { rows } = await pool.query(
     `UPDATE users
@@ -17,13 +20,19 @@ async function main() {
     [primaryPhone]
   );
 
-  if (!rows[0]) throw new Error("PRIMARY_ADMIN_PHONE account was not found");
-  console.log("Super admin configured:", rows[0]);
-  await pool.end();
+  if (rows[0]) console.log("Super admin configured:", rows[0]);
+  else console.warn("PRIMARY_ADMIN_PHONE account was not found; existing super admins remain unchanged.");
+  return rows[0] || null;
 }
 
-main().catch(async e => {
-  console.error("Super admin migration failed:", e);
-  await pool.end();
-  process.exit(1);
-});
+module.exports = migrateSuperAdmin;
+
+if (require.main === module) {
+  migrateSuperAdmin()
+    .then(() => pool.end())
+    .catch(async (e) => {
+      console.error("Super admin migration failed:", e);
+      await pool.end();
+      process.exit(1);
+    });
+}
