@@ -120,7 +120,7 @@ export default function Locations() {
         <View style={s.card}>
           <Text style={s.sub}>لو لم تضف أي نطاق فلن يتم رفض العميل بسبب موقعه. بعد إضافة نطاق، يتم التحقق من GPS داخل دائرة الخدمة.</Text>
           <Text style={s.label}>المكتب</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{(data.offices||[]).map((o:any)=><Pressable key={o.id} onPress={()=>setOfficeId(o.id);loadAreas(o.id)} style={[s.chip,officeId===o.id&&s.on]}><Text style={officeId===o.id?s.onText:s.chipText}>{o.name}</Text></Pressable>)}</ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{(data.offices||[]).map((o:any)=><Pressable key={o.id} onPress={() => { setOfficeId(o.id); loadAreas(o.id); }} style={[s.chip,officeId===o.id&&s.on]}><Text style={officeId===o.id?s.onText:s.chipText}>{o.name}</Text></Pressable>)}</ScrollView>
           {!data.offices?.length&&<Text style={s.warning}>أضف مكتب تشغيل أولًا من إدارة العمليات.</Text>}
           <TextInput value={areaName} onChangeText={setAreaName} placeholder="اسم النطاق: وسط بنها" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
           <TextInput value={areaLat} onChangeText={setAreaLat} placeholder="Latitude مثال: 30.466" keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
