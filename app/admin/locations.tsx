@@ -130,8 +130,8 @@ export default function Locations() {
           {officeId&&(data.officeAreas||[]).map((a:any)=><View key={a.id} style={s.areaRow}><Text style={s.meta}>{a.name} • {a.radius_meters} متر</Text><Text style={s.meta}>📍 {a.center_latitude}, {a.center_longitude}</Text></View>)}
         </View>
         <Text style={s.section}>التنظيم الإداري</Text>
-        {data.governorates.map((g: any) => {
-          const centers = data.centers.filter((c: any) => c.governorate_id === g.id);
+        {(data.governorates || []).map((g: any) => {
+          const centers = (data.centers || []).filter((c: any) => c.governorate_id === g.id);
           const open = expanded === g.id;
           return (
             <View key={g.id} style={s.govCard}>
