@@ -17,7 +17,7 @@ docs/                 Product/engineering runbooks
 
 - `server/routes/` contains HTTP endpoints grouped by business capability.
 - `server/migrate_*.js` contains idempotent database migrations used during startup/deployment.
-- Order lifecycle authority is `server/routes/order_workflow.js`; the older duplicate driver-dispatch router is not mounted.
+- Order lifecycle, dispatch and driver transitions are owned by `server/routes/orders.js`.
 - Order-item availability/replacement lives in `server/routes/order_item_adjustments.js`.
 - Customer order editing lives in `server/routes/customer_order_edits.js`.
 - Ratings live in `server/routes/ratings.js`.
