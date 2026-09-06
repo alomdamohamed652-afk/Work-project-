@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
-const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['banner','بانر','رسالة أو عرض بارز'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
+const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
 const LAYOUTS=[['horizontal','بطاقات أفقية'],['grid','شبكة'],['single','عنصر واحد']] as const;
 const DESTINATIONS=[
   ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
@@ -111,7 +111,8 @@ export default function Builder(){
     <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Pressable onPress={()=>router.replace('/admin')} style={s.back}><Text style={s.backText}>←</Text></Pressable>
       <Text style={s.title}>تنظيم الواجهة الرئيسية</Text>
-      <Text style={s.sub}>هنا أنت تتحكم في ما يظهر للعميل: اسم القسم، صورته، نوعه، ترتيبه والوجهة التي يفتحها. لا تحتاج لكتابة مسارات تقنية؛ اختر مثلًا «قسم الصيدليات» وسيتم الفلترة تلقائيًا.</Text>
+      <Text style={s.sub}>هنا أنت تتحكم في الأقسام والنوافذ المنبثقة. البانرات الرئيسية لها إدارة مستقلة لأنها تظهر من جدول مختلف فعلًا.</Text>
+      <Pressable onPress={()=>router.push('/admin/banners')} style={s.bannerLink}><Text style={s.bannerLinkText}>🖼️ إدارة البانرات الرئيسية</Text></Pressable>
 
       <View style={s.card}>
         <Text style={s.section}>1. اختر شكل القسم</Text>
@@ -181,7 +182,7 @@ const s=StyleSheet.create({
   check:{color:theme.muted,fontSize:18},checkOn:{color:theme.primary},input:{height:47,borderWidth:1,borderColor:theme.border,borderRadius:12,backgroundColor:theme.background,color:theme.text,paddingHorizontal:12,marginBottom:7},
   destinations:{flexDirection:'row-reverse',flexWrap:'wrap',gap:7},destination:{paddingHorizontal:11,paddingVertical:9,borderRadius:11,borderWidth:1,borderColor:theme.border},destinationOn:{backgroundColor:theme.primary,borderColor:theme.primary},
   destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},
-  primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},secondary:{height:43,borderRadius:12,borderWidth:1,borderColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:8},secondaryText:{color:theme.primary,fontWeight:'900',fontSize:11},preview:{flexDirection:'row-reverse',alignItems:'center',gap:8,borderRadius:11,backgroundColor:theme.background,padding:10,marginTop:6},previewTitle:{color:theme.text,fontSize:11,fontWeight:'900',textAlign:'right'},
+  bannerLink:{height:46,borderRadius:13,backgroundColor:theme.accentSoft,borderWidth:1,borderColor:theme.accent,alignItems:'center',justifyContent:'center',marginTop:12},bannerLinkText:{color:theme.warning,fontWeight:'900',fontSize:11},primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},secondary:{height:43,borderRadius:12,borderWidth:1,borderColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:8},secondaryText:{color:theme.primary,fontWeight:'900',fontSize:11},preview:{flexDirection:'row-reverse',alignItems:'center',gap:8,borderRadius:11,backgroundColor:theme.background,padding:10,marginTop:6},previewTitle:{color:theme.text,fontSize:11,fontWeight:'900',textAlign:'right'},
   error:{color:theme.danger,fontSize:11,textAlign:'right',marginTop:9},currentTitle:{color:theme.text,fontSize:17,fontWeight:'900',textAlign:'right',marginTop:20,marginBottom:9},
   item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginBottom:8},itemOff:{opacity:.6},itemTop:{flexDirection:'row-reverse',alignItems:'center',gap:9},
   order:{width:30,height:30,borderRadius:10,backgroundColor:theme.background,alignItems:'center',justifyContent:'center'},orderText:{color:theme.primary,fontWeight:'900'},name:{color:theme.text,fontWeight:'900',textAlign:'right'},meta:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:4},
