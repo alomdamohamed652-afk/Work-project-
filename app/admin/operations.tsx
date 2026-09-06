@@ -64,7 +64,7 @@ export default function Operations() {
       </Section>
 
       <Section title="التشغيل والمناطق">
-        <Nav title="المحافظات والمراكز" sub="المحافظات بشكل مجموعات قابلة للفتح وإدارة المراكز تحت كل محافظة" path="/admin/locations"/>
+        <Nav title="المحافظات والمراكز ونطاق التوصيل" sub="تنظيم المحافظات والمراكز وتحديد دوائر الخدمة المسموح للطلبات داخلها" path="/admin/locations"/>
         <Nav title="الفئات والمستويات" sub="الترقية، الحفاظ على المستوى والمزايا" path="/admin/tiers"/>
         <Nav title="المكافآت" sub="خصومات وشحن مجاني ورصيد وقسائم" path="/admin/rewards"/>
       </Section>
