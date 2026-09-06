@@ -19,7 +19,7 @@ docs/                    engineering and release runbooks
 
 ## Core order ownership
 
-- `server/routes/order_workflow.js` is the authority for order lifecycle and driver dispatch transitions.
+- `server/routes/orders.js` is the authority for order lifecycle, dispatch and driver transitions.
 - `server/routes/order_item_adjustments.js` owns unavailable/replacement item handling.
 - `server/routes/customer_order_edits.js` owns customer edits while an order is editable.
 - `server/routes/payment_adjustments.js` owns post-payment balance adjustments.
