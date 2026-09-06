@@ -1,6 +1,9 @@
 const {pool}=require('./db');
 async function main(){
  await pool.query(`
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_assignment_mode TEXT;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_assignment_accepted_at TIMESTAMPTZ;
+  CREATE INDEX IF NOT EXISTS orders_manual_assignment_idx ON orders(driver_id,driver_assignment_mode,status);
   CREATE TABLE IF NOT EXISTS special_orders(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
