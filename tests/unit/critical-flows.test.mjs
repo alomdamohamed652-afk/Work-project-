@@ -128,3 +128,12 @@ test('driver action payload matches the active state-machine contract', () => {
   assert.equal(next('picked_up', 'picked_up'), 'on_the_way');
   assert.equal(next('assigned', 'picked_up'), null);
 });
+
+
+test('preparation workflow always has a usable default ETA', () => {
+  const etaMinutes = (configured) => Math.max(0, Number(configured ?? 30));
+  assert.equal(etaMinutes(null), 30);
+  assert.equal(etaMinutes(undefined), 30);
+  assert.equal(etaMinutes(45), 45);
+  assert.equal(etaMinutes(-5), 0);
+});
