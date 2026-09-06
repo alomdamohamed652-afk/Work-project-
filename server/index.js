@@ -122,7 +122,6 @@ app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/location', locationRoutes);
-app.use('/api/orders', orderWorkflowRoutes);
 app.use('/api/orders', orderItemAdjustmentRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/orders', orderProofRoutes);
