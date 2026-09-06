@@ -7,11 +7,7 @@ if (!jwtSecret) throw new Error('JWT_SECRET is required');
 if (isProduction && !process.env.ALLOWED_ORIGINS) throw new Error('ALLOWED_ORIGINS is required in production');
 
 if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
-    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1)
-  });
+  Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development', tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1) });
 }
 
 const express = require('express');
@@ -80,35 +76,17 @@ const ratingsRoutes = require('./routes/ratings');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const allowedOrigins = String(process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
+const allowedOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    callback(null, allowedOrigins.includes(origin));
-  },
-  credentials: true
-}));
+app.use(cors({ origin(origin, callback) { if (!origin) return callback(null, true); callback(null, allowedOrigins.includes(origin)); }, credentials: true }));
 app.use(express.json({ limit: '8mb' }));
 app.use(auditMiddleware);
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: 'draft-8',
-  legacyHeaders: false,
-  message: { error: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.' }
-});
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.' } });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register-customer', authLimiter);
 app.use('/api/auth/continue', authLimiter);
-
 app.get('/', (_req, res) => res.json({ name: 'Work-project API', status: 'running' }));
 app.use('/health', healthRoutes);
 app.use('/api/auth', authRoutes);
@@ -151,116 +129,13 @@ app.use('/api/admin/coupons', couponRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/customer/favorites', favoriteRoutes);
 app.use('/api/operations', operationsRoutes);
-
 if (process.env.SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
-
-app.use((err, _req, res, _next) => {
-  if (process.env.SENTRY_DSN) Sentry.captureException(err);
-  console.error(err);
-  const known = ['DELIVERY_PROOF_REQUIRED', 'ORDER_MUST_HAVE_ACTIVE_ITEM', 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'];
-  const msg = err.message === 'DELIVERY_PROOF_REQUIRED'
-    ? 'إثبات التسليم مطلوب لهذا الطلب المدفوع بالكامل'
-    : err.message === 'ORDER_MUST_HAVE_ACTIVE_ITEM'
-      ? 'يجب أن يحتوي الطلب على صنف واحد على الأقل'
-      : err.message === 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED'
-        ? 'يجب حل حالة الصنف غير المتاح أولًا'
-        : 'Internal server error';
-  res.status(known.includes(err.message) ? 409 : 500).json({ error: msg });
-});
-
-async function withAdvisoryLock(lockKey, job) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [lockKey]);
-    if (!result.rows[0].locked) return false;
-    try {
-      await job(client);
-      return true;
-    } finally {
-      await client.query('SELECT pg_advisory_unlock($1)', [lockKey]);
-    }
-  } finally {
-    client.release();
-  }
-}
-
-async function cleanupMedia() {
-  try {
-    await withAdvisoryLock(81001, async (client) => {
-      const { rowCount } = await client.query(`DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`);
-      if (rowCount) console.log(`Media cleanup removed ${rowCount} expired images`);
-    });
-  } catch (e) { console.error('Media cleanup failed', e.message); }
-}
-
-async function processPaymentAdjustmentNotifications() {
-  try {
-    await withAdvisoryLock(81002, async (client) => {
-      const { rows } = await client.query(`SELECT id,customer_id,order_id,amount FROM payment_adjustments WHERE status='pending' AND customer_notified_at IS NULL ORDER BY created_at ASC LIMIT 100`);
-      const { notifyUser } = require('./push');
-      for (const x of rows) {
-        try {
-          await notifyUser(x.customer_id, 'يوجد مبلغ مستحق لك', `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`, 'payment_adjustment', { adjustmentId: x.id, orderId: x.order_id, amount: x.amount });
-          await client.query(`UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now() WHERE id=$1 AND customer_notified_at IS NULL`, [x.id]);
-        } catch (e) { console.error('Payment adjustment notification failed', x.id, e.message); }
-      }
-    });
-  } catch (e) { console.error('Payment adjustment notification scan failed', e.message); }
-}
-
-async function processDispatch() {
-  try { await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders()); }
-  catch (e) { console.error('Dispatch flow check failed', e.message); }
-}
-
-async function notifyUserSafe(id) {
-  try {
-    const { notifyUser } = require('./push');
-    await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {});
-  } catch (e) { console.error('Support notification failed', e.message); }
-}
-
-async function processSupportSla() {
-  try {
-    await withAdvisoryLock(81004, async (client) => {
-      const { rows } = await client.query(`SELECT sc.id,sc.customer_id FROM support_conversations sc WHERE sc.status IN ('open','pending') AND sc.needs_reply=true AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL AND sc.last_staff_message_at IS NULL AND sc.first_customer_message_at<=now()-interval '2 minutes'`);
-      for (const x of rows) {
-        await notifyUserSafe(x.customer_id);
-        await client.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1', [x.id]);
-      }
-    });
-  } catch (e) { console.error('Support SLA check failed', e.message); }
-}
-
-async function start() {
-  await migrateCore();
-  await migrateCustomer();
-  await migrateMarketing();
-  await migrateFinancials();
-  await migrateCatalog();
-  await migrateMedia();
-  await migrateOperations();
-  await migrateMembershipV2();
-  await migrateOperationsV3();
-  await migrateDeliveryProof();
-  await migrateRefunds();
-  await migratePaymentAdjustments();
-  await migrateDispatchFlow();
-  await migrateOrderItemAdjustmentRoutes;
-  await migrateOrderItemAdjustments();
-  await migrateAccountSettings();
-  await migrateRatings();
-  await pool.query('SELECT 1');
-  await cleanupMedia();
-  setInterval(processDispatch, 15000);
-  setInterval(processPaymentAdjustmentNotifications, 15000);
-  setInterval(cleanupMedia, 60 * 60 * 1000);
-  setInterval(processSupportSla, 30000);
-  app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`));
-}
-
-start().catch((error) => {
-  if (process.env.SENTRY_DSN) Sentry.captureException(error);
-  console.error('Unable to start API:', error);
-  process.exit(1);
-});
+app.use((err, _req, res, _next) => { if (process.env.SENTRY_DSN) Sentry.captureException(err); console.error(err); const known = ['DELIVERY_PROOF_REQUIRED', 'ORDER_MUST_HAVE_ACTIVE_ITEM', 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED']; const msg = err.message === 'DELIVERY_PROOF_REQUIRED' ? 'إثبات التسليم مطلوب لهذا الطلب المدفوع بالكامل' : err.message === 'ORDER_MUST_HAVE_ACTIVE_ITEM' ? 'يجب أن يحتوي الطلب على صنف واحد على الأقل' : err.message === 'ITEM_UNAVAILABLE_MUST_BE_RESOLVED' ? 'يجب حل حالة الصنف غير المتاح أولًا' : 'Internal server error'; res.status(known.includes(err.message) ? 409 : 500).json({ error: msg }); });
+async function withAdvisoryLock(lockKey, job) { const client = await pool.connect(); try { const result = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [lockKey]); if (!result.rows[0].locked) return false; try { await job(client); return true; } finally { await client.query('SELECT pg_advisory_unlock($1)', [lockKey]); } } finally { client.release(); } }
+async function cleanupMedia() { try { await withAdvisoryLock(81001, async (client) => { const { rowCount } = await client.query(`DELETE FROM media_assets WHERE created_at < now() - interval '3 days'`); if (rowCount) console.log(`Media cleanup removed ${rowCount} expired images`); }); } catch (e) { console.error('Media cleanup failed', e.message); } }
+async function processPaymentAdjustmentNotifications() { try { await withAdvisoryLock(81002, async (client) => { const { rows } = await client.query(`SELECT id,customer_id,order_id,amount FROM payment_adjustments WHERE status='pending' AND customer_notified_at IS NULL ORDER BY created_at ASC LIMIT 100`); const { notifyUser } = require('./push'); for (const x of rows) { try { await notifyUser(x.customer_id, 'يوجد مبلغ مستحق لك', `تم تعديل طلبك ويوجد مبلغ ${Number(x.amount).toFixed(2)} ج.م مستحق لك. ستحدد الإدارة طريقة تسويته، سواء إضافته إلى رصيدك أو رده لك.`, 'payment_adjustment', { adjustmentId: x.id, orderId: x.order_id, amount: x.amount }); await client.query(`UPDATE payment_adjustments SET customer_notified_at=now(),updated_at=now() WHERE id=$1 AND customer_notified_at IS NULL`, [x.id]); } catch (e) { console.error('Payment adjustment notification failed', x.id, e.message); } } }); } catch (e) { console.error('Payment adjustment notification scan failed', e.message); } }
+async function processDispatch() { try { await withAdvisoryLock(81003, async () => orderWorkflowRoutes.dispatchPreparingOrders()); } catch (e) { console.error('Dispatch flow check failed', e.message); } }
+async function notifyUserSafe(id) { try { const { notifyUser } = require('./push'); await notifyUser(id, 'تنبيه من الدعم', 'نعتذر عن التأخير، سيتم التواصل معك في أقرب وقت.', 'support', {}); } catch (e) { console.error('Support notification failed', e.message); } }
+async function processSupportSla() { try { await withAdvisoryLock(81004, async (client) => { const { rows } = await client.query(`SELECT sc.id,sc.customer_id FROM support_conversations sc WHERE sc.status IN ('open','pending') AND sc.needs_reply=true AND sc.followup_sent_at IS NULL AND sc.first_customer_message_at IS NOT NULL AND sc.last_staff_message_at IS NULL AND sc.first_customer_message_at<=now()-interval '2 minutes'`); for (const x of rows) { await notifyUserSafe(x.customer_id); await client.query('UPDATE support_conversations SET followup_sent_at=now(),updated_at=now() WHERE id=$1', [x.id]); } }); } catch (e) { console.error('Support SLA check failed', e.message); } }
+async function start() { await migrateCore(); await migrateCustomer(); await migrateMarketing(); await migrateFinancials(); await migrateCatalog(); await migrateMedia(); await migrateOperations(); await migrateMembershipV2(); await migrateOperationsV3(); await migrateDeliveryProof(); await migrateRefunds(); await migratePaymentAdjustments(); await migrateDispatchFlow(); await migrateOrderItemAdjustments(); await migrateAccountSettings(); await migrateRatings(); await pool.query('SELECT 1'); await cleanupMedia(); setInterval(processDispatch, 15000); setInterval(processPaymentAdjustmentNotifications, 15000); setInterval(cleanupMedia, 60 * 60 * 1000); setInterval(processSupportSla, 30000); app.listen(port, '0.0.0.0', () => console.log(`API listening on port ${port}`)); }
+start().catch((error) => { if (process.env.SENTRY_DSN) Sentry.captureException(error); console.error('Unable to start API:', error); process.exit(1); });
