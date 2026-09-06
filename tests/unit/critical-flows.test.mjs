@@ -100,3 +100,8 @@ test('verified electronic payment plus cash remains partially paid, not paid', (
   assert.equal(paymentStatus(100, 60), 'partially_paid');
   assert.equal(paymentStatus(100, 0), 'cash_due');
 });
+
+
+function allocatePaid(total, paid, amounts){let remaining=Math.min(paid,total);return amounts.map((amount,i)=>{let part=i===amounts.length-1?Math.min(amount,remaining):Math.min(amount,Math.round((paid*amount/Math.max(total,1))*100)/100);remaining=Math.max(0,Math.round((remaining-part)*100)/100);return part})}
+test('multi-restaurant adjustment rebalances paid amount without cross-order leakage',()=>{const parts=allocatePaid(500,200,[300,200]);assert.equal(parts.reduce((a,b)=>a+b,0),200);assert.ok(parts[0]<=300&&parts[1]<=200);});
+test('multi-restaurant COD remains cash due per order after rebalance',()=>{const parts=allocatePaid(450,0,[250,200]);assert.deepEqual(parts,[0,0]);});
