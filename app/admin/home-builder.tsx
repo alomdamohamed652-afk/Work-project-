@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
-const TYPES=[['custom','قسم عادي','عنوان ومحتوى قابلان للتخصيص'],['banner','بانر','رسالة بارزة أعلى الصفحة'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
+const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['banner','بانر','رسالة أو عرض بارز'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
+const LAYOUTS=[['horizontal','بطاقات أفقية'],['grid','شبكة'],['single','عنصر واحد']] as const;
 const DESTINATIONS=[
   ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
   ['pharmacies','قسم الصيدليات','/customer/restaurants?merchantType=pharmacy'],
@@ -24,6 +25,8 @@ export default function Builder(){
   const [subtitle,setSubtitle]=useState('');
   const [button,setButton]=useState('');
   const [itemImage,setItemImage]=useState('');
+  const [items,setItems]=useState<any[]>([]);
+  const [layout,setLayout]=useState('horizontal');
   const [route,setRoute]=useState('/customer/restaurants');
   const [type,setType]=useState<string>('custom');
   const [busy,setBusy]=useState(false);
@@ -55,13 +58,13 @@ export default function Builder(){
           sectionType:type,
           title:title.trim(),
           subtitle:subtitle.trim(),
-          payload:{items:[{title:title.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]},
+          payload:{layout,items:items.length?items:[{title:title.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]},
           sortOrder:sections.length,
         }),
       });
       const d=await read(r);
       if(!r.ok)throw Error(d.error||'تعذر إضافة القسم');
-      setTitle('');setSubtitle('');setButton('');setItemImage('');
+      setTitle('');setSubtitle('');setButton('');setItemImage('');setItems([]);setLayout('horizontal');
       await load();
     }catch(e){setError(e instanceof Error?e.message:'تعذر إضافة القسم');}
     finally{setBusy(false);}
@@ -116,8 +119,13 @@ export default function Builder(){
           </Pressable>)}
         </View>
         <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}. مثال: لو اخترت «قسم الصيدليات» سيفتح العميل قائمة الجهات مفلترة على الصيدليات.</Text>
-
-        <Pressable disabled={busy} onPress={add} style={[s.primary,busy&&{opacity:.6}]}><Text style={s.primaryText}>{busy?'جاري الحفظ...':'إضافة القسم إلى الرئيسية'}</Text></Pressable>
+        <Text style={s.section}>4. عناصر القسم</Text>
+        <Text style={s.hint}>يمكنك إضافة أكثر من بطاقة. كل بطاقة لها صورة وزر ووجهة مستقلة.</Text>
+        <Pressable onPress={addItem} style={s.secondary}><Text style={s.secondaryText}>+ إضافة العنصر الحالي للقسم</Text></Pressable>
+        {items.map((it,i)=><View key={i} style={s.preview}><View style={{flex:1}}><Text style={s.previewTitle}>{i+1}. {it.title}</Text><Text style={s.meta}>الزر: {it.button} • {DESTINATIONS.find(d=>d[2]===it.route)?.[1]||'وجهة مخصصة'} • {it.image?'بصورة':'بدون صورة'}</Text></View><Pressable onPress={()=>removeItem(i)}><Text style={s.deleteText}>حذف</Text></Pressable></View>)}
+        <Text style={s.section}>5. شكل العرض</Text>
+        <View style={s.destinations}>{LAYOUTS.map(([value,label])=><Pressable key={value} onPress={()=>setLayout(value)} style={[s.destination,layout===value&&s.destinationOn]}><Text style={layout===value?s.destinationTextOn:s.destinationText}>{label}</Text></Pressable>)}</View>
+        <Pressable disabled={busy} onPress={add} style={[s.primary,busy&&{opacity:.6}]}><Text style={s.primaryText}>{busy?'جاري الحفظ...':items.length?'حفظ القسم وعناصره':'إضافة القسم إلى الرئيسية'}</Text></Pressable>
       </View>
 
       {error?<Text style={s.error}>{error}</Text>:null}
@@ -151,7 +159,7 @@ const s=StyleSheet.create({
   check:{color:theme.muted,fontSize:18},checkOn:{color:theme.primary},input:{height:47,borderWidth:1,borderColor:theme.border,borderRadius:12,backgroundColor:theme.background,color:theme.text,paddingHorizontal:12,marginBottom:7},
   destinations:{flexDirection:'row-reverse',flexWrap:'wrap',gap:7},destination:{paddingHorizontal:11,paddingVertical:9,borderRadius:11,borderWidth:1,borderColor:theme.border},destinationOn:{backgroundColor:theme.primary,borderColor:theme.primary},
   destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},
-  primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},
+  primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},secondary:{height:43,borderRadius:12,borderWidth:1,borderColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:8},secondaryText:{color:theme.primary,fontWeight:'900',fontSize:11},preview:{flexDirection:'row-reverse',alignItems:'center',gap:8,borderRadius:11,backgroundColor:theme.background,padding:10,marginTop:6},previewTitle:{color:theme.text,fontSize:11,fontWeight:'900',textAlign:'right'},
   error:{color:theme.danger,fontSize:11,textAlign:'right',marginTop:9},currentTitle:{color:theme.text,fontSize:17,fontWeight:'900',textAlign:'right',marginTop:20,marginBottom:9},
   item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginBottom:8},itemOff:{opacity:.6},itemTop:{flexDirection:'row-reverse',alignItems:'center',gap:9},
   order:{width:30,height:30,borderRadius:10,backgroundColor:theme.background,alignItems:'center',justifyContent:'center'},orderText:{color:theme.primary,fontWeight:'900'},name:{color:theme.text,fontWeight:'900',textAlign:'right'},meta:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:4},
