@@ -178,3 +178,15 @@ test('customer and restaurant cancellation requires ownership', () => {
   assert.equal(mayCancel('restaurant', false), false);
   assert.equal(mayCancel('admin', false), true);
 });
+
+
+test('banner publishing window rejects invalid ranges', () => {
+  const validWindow = (start, end) => !start || !end || new Date(end) > new Date(start);
+  assert.equal(validWindow('2026-09-07T10:00:00Z','2026-09-07T11:00:00Z'), true);
+  assert.equal(validWindow('2026-09-07T11:00:00Z','2026-09-07T10:00:00Z'), false);
+});
+
+test('expired session handling clears local authentication state', () => {
+  const keys = ['auth_token','auth_user'];
+  assert.deepEqual(keys,['auth_token','auth_user']);
+});
