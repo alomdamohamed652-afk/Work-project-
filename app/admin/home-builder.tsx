@@ -50,6 +50,9 @@ export default function Builder(){
   };
   useEffect(()=>{load()},[]);
 
+  const addItem=()=>{if(!itemTitle.trim())return setError('اكتب اسم العنصر');setItems(x=>[...x,{title:itemTitle.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]);setItemTitle('');setButton('');setItemImage('');};
+  const removeItem=(i:number)=>setItems(x=>x.filter((_,index)=>index!==i));
+
   const add=async()=>{
     if(!title.trim())return setError('اكتب اسمًا واضحًا للقسم');
     try{
