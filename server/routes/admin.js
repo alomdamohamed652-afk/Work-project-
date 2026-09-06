@@ -6,6 +6,25 @@ router.use(requireAuth, requireRole("admin"));
 
 router.get("/me", (req, res) => res.json({ user: req.user }));
 router.get("/stats", async (_req, res, next) => { try { const [{rows:users},{rows:drivers},{rows:restaurants},{rows:categories},{rows:pending}]=await Promise.all([pool.query("SELECT COUNT(*)::int AS count FROM users"),pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role='driver' AND status='active'"),pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role='restaurant' AND status='active'"),pool.query("SELECT COUNT(*)::int AS count FROM categories WHERE is_active=true"),pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE status IN ('pending','restaurant_pending')")]);res.json({users:users[0].count,activeDrivers:drivers[0].count,activeRestaurants:restaurants[0].count,activeCategories:categories[0].count,pendingOrders:pending[0].count}); } catch(e){next(e)} });
+router.get("/attention", async (_req,res,next)=>{try{
+ const [{rows:review},{rows:noDriver},{rows:late},{rows:itemIssues},{rows:adjustments},{rows:payments}]=await Promise.all([
+  pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE status IN ('pending','restaurant_pending')"),
+  pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE status IN ('preparing','ready') AND driver_id IS NULL AND driver_unavailable_notified_at IS NOT NULL"),
+  pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE status IN ('preparing','ready') AND estimated_ready_at IS NOT NULL AND estimated_ready_at<now()"),
+  pool.query("SELECT COUNT(DISTINCT o.id)::int AS count FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status NOT IN ('delivered','cancelled','restaurant_rejected','admin_rejected') AND oi.availability_status IN ('unavailable','replacement_pending')"),
+  pool.query("SELECT COUNT(*)::int AS count FROM payment_adjustments WHERE status='pending'"),
+  pool.query("SELECT COUNT(*)::int AS count FROM checkout_sessions WHERE payment_status IN ('pending_verification','payment_pending')")
+ ]);
+ const items=[
+  {key:'orders',title:'طلبات تحتاج مراجعة',count:review[0].count,path:'/admin/orders',description:'طلبات جديدة أو تنتظر قرارًا'},
+  {key:'drivers',title:'طلبات بدون مندوب متاح',count:noDriver[0].count,path:'/admin/orders',description:'طلبات أبلغ النظام بعدم توفر مندوب لها'},
+  {key:'late',title:'طلبات متأخرة عن الجاهزية',count:late[0].count,path:'/admin/orders',description:'تجاوزت وقت التجهيز المتوقع'},
+  {key:'items',title:'مشاكل أصناف معلقة',count:itemIssues[0].count,path:'/admin/orders',description:'أصناف غير متاحة أو تنتظر قرار العميل'},
+  {key:'adjustments',title:'تسويات مالية معلقة',count:adjustments[0].count,path:'/admin/payment-adjustments',description:'فروق مالية تحتاج معالجة'},
+  {key:'payments',title:'مدفوعات تحتاج متابعة',count:payments[0].count,path:'/admin/payments',description:'جلسات دفع ما زالت معلقة'}
+ ];
+ res.json({items,total:items.reduce((n,x)=>n+Number(x.count||0),0)});
+}catch(e){next(e)}});
 router.get("/users", async (_req,res,next)=>{try{const {rows}=await pool.query("SELECT id,full_name,phone,email,role,status,created_at,updated_at FROM users ORDER BY created_at DESC");res.json({users:rows})}catch(e){next(e)}});
 router.patch("/users/:id",requireSuperAdmin,async(req,res,next)=>{try{const {role,status}=req.body,allowedRoles=["customer","driver","restaurant","staff","admin"],allowedStatus=["active","suspended","pending"];if(role!==undefined&&!allowedRoles.includes(role))return res.status(400).json({error:"Invalid role"});if(status!==undefined&&!allowedStatus.includes(status))return res.status(400).json({error:"Invalid status"});if(role===undefined&&status===undefined)return res.status(400).json({error:"Nothing to update"});const {rows:targetRows}=await pool.query("SELECT id,role FROM users WHERE id=$1",[req.params.id]);const target=targetRows[0];if(!target)return res.status(404).json({error:"User not found"});if(target.role==="super_admin")return res.status(403).json({error:"لا يمكن تعديل حساب السوبر أدمن"});const {rows}=await pool.query(`UPDATE users SET role=COALESCE($1,role),status=COALESCE($2,status),updated_at=now() WHERE id=$3 RETURNING id,full_name,phone,email,role,status,created_at,updated_at`,[role??null,status??null,req.params.id]);res.json({user:rows[0]})}catch(e){next(e)}});
 router.get("/restaurants",async(_req,res,next)=>{try{const {rows}=await pool.query(`SELECT u.id,u.full_name,u.phone,u.email,u.status,u.created_at,rp.display_name,rp.description,rp.logo_url,rp.address,rp.area,rp.minimum_order,rp.preparation_minutes,rp.is_open,rp.is_featured,COUNT(mi.id)::int AS menu_items FROM users u LEFT JOIN restaurant_profiles rp ON rp.restaurant_id=u.id LEFT JOIN menu_items mi ON mi.restaurant_id=u.id WHERE u.role='restaurant' GROUP BY u.id,rp.id ORDER BY COALESCE(rp.is_featured,false) DESC,COALESCE(rp.display_name,u.full_name)`);res.json({restaurants:rows})}catch(e){next(e)}});
