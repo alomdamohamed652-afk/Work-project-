@@ -25,6 +25,7 @@ export default function Builder(){
   const [subtitle,setSubtitle]=useState('');
   const [button,setButton]=useState('');
   const [itemImage,setItemImage]=useState('');
+  const [itemTitle,setItemTitle]=useState('');
   const [items,setItems]=useState<any[]>([]);
   const [layout,setLayout]=useState('horizontal');
   const [route,setRoute]=useState('/customer/restaurants');
@@ -58,13 +59,13 @@ export default function Builder(){
           sectionType:type,
           title:title.trim(),
           subtitle:subtitle.trim(),
-          payload:{layout,items:items.length?items:[{title:title.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]},
+          payload:{layout,items:items.length?items:[{title:itemTitle.trim()||title.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]},
           sortOrder:sections.length,
         }),
       });
       const d=await read(r);
       if(!r.ok)throw Error(d.error||'تعذر إضافة القسم');
-      setTitle('');setSubtitle('');setButton('');setItemImage('');setItems([]);setLayout('horizontal');
+      setTitle('');setSubtitle('');setItemTitle('');setButton('');setItemImage('');setItems([]);setLayout('horizontal');
       await load();
     }catch(e){setError(e instanceof Error?e.message:'تعذر إضافة القسم');}
     finally{setBusy(false);}
@@ -109,6 +110,7 @@ export default function Builder(){
         <Text style={s.section}>2. محتوى القسم</Text>
         <TextInput value={title} onChangeText={setTitle} placeholder="مثال: عروض اليوم" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={subtitle} onChangeText={setSubtitle} placeholder="وصف مختصر اختياري" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={itemTitle} onChangeText={setItemTitle} placeholder="اسم العنصر — مثال: صيدليات قريبة" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={button} onChangeText={setButton} placeholder="اسم الزر — مثال: عرض الصيدليات" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={itemImage} onChangeText={setItemImage} placeholder="رابط صورة للقسم (اختياري)" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
 
