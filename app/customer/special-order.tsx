@@ -4,7 +4,7 @@ import {ActivityIndicator,Pressable,ScrollView,StyleSheet,Text,TextInput,View}fr
 import {SafeAreaView}from'react-native-safe-area-context';
 import {router}from'expo-router';
 import {theme}from'@/constants/theme';
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\\/$/,'');
+const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 export default function SpecialOrder(){
  const [description,setDescription]=useState(''),[place,setPlace]=useState(''),[placeDescription,setPlaceDescription]=useState(''),[estimate,setEstimate]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const submit=async()=>{try{if(description.trim().length<3)return setError('اكتب تفاصيل الطلب بوضوح');setBusy(true);setError('');const t=await AsyncStorage.getItem('auth_token'),r=await fetch(API+'/api/special-orders',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({description:description.trim(),placeName:place.trim()||null,placeDescription:placeDescription.trim()||null,estimatedProductPrice:estimate.trim()?Number(estimate):null})}),d=await r.json();if(!r.ok)throw Error(d.error||'تعذر إرسال الطلب');router.back()}catch(e){setError(e instanceof Error?e.message:'تعذر إرسال الطلب')}finally{setBusy(false)}};
