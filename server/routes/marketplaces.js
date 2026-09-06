@@ -42,6 +42,8 @@ router.patch('/admin/categories/:id',requireAuth,admin,async(req,res,next)=>{try
   if(!rows[0])return res.status(404).json({error:'القسم غير موجود'});res.json({category:rows[0]});
 }catch(e){next(e)}});
 
+router.delete('/admin/categories/:id',requireAuth,admin,async(req,res,next)=>{try{const {rows}=await pool.query('DELETE FROM marketplace_categories WHERE id=$1 RETURNING id',[req.params.id]);if(!rows[0])return res.status(404).json({error:'القسم غير موجود'});res.json({ok:true})}catch(e){next(e)}});
+
 router.post('/admin/categories/:id/subcategories',requireAuth,admin,async(req,res,next)=>{try{
   const b=req.body||{},name=String(b.name||'').trim();if(!name)return res.status(400).json({error:'اكتب اسم التصنيف'});
   const {rows}=await pool.query(`INSERT INTO marketplace_subcategories(category_id,name,image_url,icon,is_active,sort_order) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[req.params.id,name,b.imageUrl||null,b.icon||null,b.isActive!==false,Number(b.sortOrder||0)]);
@@ -52,6 +54,8 @@ router.patch('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{
   const b=req.body||{},{rows}=await pool.query(`UPDATE marketplace_subcategories SET name=COALESCE($2,name),image_url=COALESCE($3,image_url),icon=COALESCE($4,icon),is_active=COALESCE($5,is_active),sort_order=COALESCE($6,sort_order),updated_at=now() WHERE id=$1 RETURNING *`,[req.params.id,b.name?String(b.name).trim():null,b.imageUrl===undefined?null:(b.imageUrl||null),b.icon===undefined?null:(b.icon||null),b.isActive===undefined?null:Boolean(b.isActive),b.sortOrder===undefined?null:Number(b.sortOrder)]);
   if(!rows[0])return res.status(404).json({error:'التصنيف غير موجود'});res.json({subcategory:rows[0]});
 }catch(e){next(e)}});
+
+router.delete('/admin/subcategories/:id',requireAuth,admin,async(req,res,next)=>{try{const {rows}=await pool.query('DELETE FROM marketplace_subcategories WHERE id=$1 RETURNING id',[req.params.id]);if(!rows[0])return res.status(404).json({error:'التصنيف غير موجود'});res.json({ok:true})}catch(e){next(e)}});
 
 router.get('/:idOrSlug',requireAuth,requireRole('customer'),async(req,res,next)=>{try{
   const q=String(req.params.idOrSlug);
