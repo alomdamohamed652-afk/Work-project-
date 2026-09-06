@@ -4,7 +4,8 @@ import{useEffect,useMemo,useState}from'react';
 import{ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View}from'react-native';
 import{SafeAreaView}from'react-native-safe-area-context';
 import{theme}from'@/constants/theme';
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');const KEY='customer_cart';
+import{apiJson}from'@/src/lib/api';
+const KEY='customer_cart';
 type Item={id:string;name:string;description?:string|null;price:number;image_url?:string|null;category_id?:string|null;category_name?:string|null;sort_order?:number};
 type CartItem=Item&{quantity:number;restaurantId:string;restaurantName:string};type Cart={items:CartItem[]};
 
@@ -13,7 +14,7 @@ export default function CustomerMenu(){
  const[restaurant,setRestaurant]=useState<any>(null),[items,setItems]=useState<Item[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[cartCount,setCartCount]=useState(0),[cartTotal,setCartTotal]=useState(0),[active,setActive]=useState('');
  const refreshCart=async()=>{try{const raw=await AsyncStorage.getItem(KEY),c:Cart=raw?JSON.parse(raw):{items:[]};const mine=c.items.filter(i=>i.restaurantId===String(restaurantId));setCartCount(mine.reduce((n,i)=>n+i.quantity,0));setCartTotal(mine.reduce((n,i)=>n+i.quantity*i.price,0))}catch{}};
  useEffect(()=>{refreshCart()},[]);
- useEffect(()=>{(async()=>{try{const token=await AsyncStorage.getItem('auth_token');if(!token){router.replace('/auth');return}if(!restaurantId)throw new Error('الجهة غير محددة');const r=await fetch(API+'/api/menu/restaurant/'+restaurantId,{headers:{Authorization:'Bearer '+token}}),d=await r.json();if(!r.ok)throw new Error(d.error||'تعذر تحميل المنيو');setRestaurant(d.restaurant);setItems((d.items||[]).map((x:any)=>({id:String(x.item_id??x.id),name:String(x.name||''),description:x.description??null,price:Number(x.price),image_url:x.image_url??null,category_id:x.category_id??null,category_name:x.category_name??null,sort_order:Number(x.sort_order||0)})).filter((x:Item)=>x.id&&Number.isFinite(x.price)))}catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المنيو')}finally{setLoading(false)}})()},[restaurantId]);
+ useEffect(()=>{(async()=>{try{const token=await AsyncStorage.getItem('auth_token');if(!token){router.replace('/auth');return}if(!restaurantId)throw new Error('الجهة غير محددة');const d=await apiJson('/api/menu/restaurant/'+restaurantId);setRestaurant(d.restaurant);setItems((d.items||[]).map((x:any)=>({id:String(x.item_id??x.id),name:String(x.name||''),description:x.description??null,price:Number(x.price),image_url:x.image_url??null,category_id:x.category_id??null,category_name:x.category_name??null,sort_order:Number(x.sort_order||0)})).filter((x:Item)=>x.id&&Number.isFinite(x.price)))}catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المنيو')}finally{setLoading(false)}})()},[restaurantId]);
  const groups=useMemo(()=>items.reduce((a:any[],x:any)=>{const id=x.category_id||'none';let g=a.find(y=>y.id===id);if(!g){g={id,name:x.category_name||'أخرى',items:[]};a.push(g)}g.items.push(x);return a},[]).map((g:any)=>({...g,items:g.items.sort((a:any,b:any)=>Number(a.sort_order||0)-Number(b.sort_order||0))})),[items]);
  useEffect(()=>{if(groups.length&&!active)setActive(groups[0].id)},[groups.length]);
  const add=async(item:Item)=>{try{const raw=await AsyncStorage.getItem(KEY),c:Cart=raw?JSON.parse(raw):{items:[]};const existing=c.items.find(i=>i.id===item.id&&i.restaurantId===String(restaurantId));if(existing)existing.quantity+=1;else c.items.push({...item,quantity:1,restaurantId:String(restaurantId),restaurantName:String(restaurant?.name||'الجهة')});await AsyncStorage.setItem(KEY,JSON.stringify(c));await refreshCart()}catch{setError('تعذر إضافة المنتج للسلة')}};
