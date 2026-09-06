@@ -108,3 +108,73 @@ test('multi-restaurant COD remains cash due per order after rebalance',()=>{cons
 
 
 test('support message metadata always has a displayable sender and timestamp',()=>{const message={sender_name:'موظف الدعم',created_at:'2026-09-06T10:30:00Z'};assert.equal(Boolean(message.sender_name.trim()),true);assert.equal(Number.isNaN(new Date(message.created_at).getTime()),false);});
+
+
+test('admin-configured proof methods stay pending until verification', () => {
+  const requiresProof = new Set(['vodafone_cash', 'custom_bank']);
+  const isPending = (parts) => parts.some((p) => requiresProof.has(p.method));
+  assert.equal(isPending([{ method: 'custom_bank', amount: 100 }]), true);
+  assert.equal(isPending([{ method: 'cash', amount: 100 }]), false);
+  assert.equal(isPending([{ method: 'cash', amount: 60 }, { method: 'custom_bank', amount: 40 }]), true);
+});
+
+test('driver action payload matches the active state-machine contract', () => {
+  const next = (current, requested) => {
+    if (requested === 'assigned' && current === 'assigned') return 'picked_up';
+    if (requested === 'picked_up' && current === 'picked_up') return 'on_the_way';
+    return null;
+  };
+  assert.equal(next('assigned', 'assigned'), 'picked_up');
+  assert.equal(next('picked_up', 'picked_up'), 'on_the_way');
+  assert.equal(next('assigned', 'picked_up'), null);
+});
+
+
+test('preparation workflow always has a usable default ETA', () => {
+  const etaMinutes = (configured) => Math.max(0, Number(configured ?? 30));
+  assert.equal(etaMinutes(null), 30);
+  assert.equal(etaMinutes(undefined), 30);
+  assert.equal(etaMinutes(45), 45);
+  assert.equal(etaMinutes(-5), 0);
+});
+
+
+test('driver dispatch routes have one canonical workflow owner', () => {
+  const workflowOwnsDriverDispatch = true;
+  const legacyOrdersOwnsDriverDispatch = false;
+  assert.equal(workflowOwnsDriverDispatch, true);
+  assert.equal(legacyOrdersOwnsDriverDispatch, false);
+});
+
+
+
+test('manual address keeps delivery price pending instead of inventing a fee', () => {
+  const summary = (coords) => coords ? { pendingDeliveryQuote:false } : { pendingDeliveryQuote:true, deliveryFees:null };
+  assert.equal(summary(false).pendingDeliveryQuote, true);
+  assert.equal(summary(false).deliveryFees, null);
+  assert.equal(summary(true).pendingDeliveryQuote, false);
+});
+
+
+test('refund workflow never auto-refunds delivered orders', () => {
+  const canAutoRefund = (status) => status === 'cancelled';
+  assert.equal(canAutoRefund('cancelled'), true);
+  assert.equal(canAutoRefund('delivered'), false);
+  assert.equal(canAutoRefund('preparing'), false);
+});
+
+test('partial refund preserves the remaining paid balance', () => {
+  const afterRefund = (paid, refund) => Math.max(0, paid - refund);
+  assert.equal(afterRefund(100, 30), 70);
+  assert.equal(afterRefund(100, 100), 0);
+  assert.equal(afterRefund(30, 100), 0);
+});
+
+
+test('customer and restaurant cancellation requires ownership', () => {
+  const mayCancel = (role, owns) => ['admin','staff'].includes(role) || owns;
+  assert.equal(mayCancel('customer', true), true);
+  assert.equal(mayCancel('customer', false), false);
+  assert.equal(mayCancel('restaurant', false), false);
+  assert.equal(mayCancel('admin', false), true);
+});

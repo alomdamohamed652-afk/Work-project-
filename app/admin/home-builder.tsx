@@ -18,6 +18,7 @@ const DESTINATIONS=[
   ['wallet','المحفظة','/customer/wallet'],
   ['orders','طلباتي','/customer/tracking'],
   ['support','الدعم','/customer/support'],
+  ['custom','رابط مخصص','custom'],
 ] as const;
 
 export default function Builder(){
@@ -30,6 +31,7 @@ export default function Builder(){
   const [items,setItems]=useState<any[]>([]);
   const [layout,setLayout]=useState('horizontal');
   const [route,setRoute]=useState('/customer/restaurants');
+  const [customRoute,setCustomRoute]=useState('');
   const [type,setType]=useState<string>('custom');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -51,7 +53,7 @@ export default function Builder(){
   };
   useEffect(()=>{load()},[]);
 
-  const addItem=()=>{if(!itemTitle.trim())return setError('اكتب اسم العنصر');setItems(x=>[...x,{title:itemTitle.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]);setItemTitle('');setButton('');setItemImage('');};
+  const addItem=()=>{if(!itemTitle.trim())return setError('اكتب اسم العنصر');const target=route==='custom'?customRoute.trim():route;if(!target)return setError('اكتب الرابط المخصص أولاً');setItems(x=>[...x,{title:itemTitle.trim(),button:button.trim()||'فتح القسم',route:target,image:itemImage.trim()||null}]);setItemTitle('');setButton('');setItemImage('');setCustomRoute('');};
   const removeItem=(i:number)=>setItems(x=>x.filter((_,index)=>index!==i));
 
   const add=async()=>{
@@ -88,7 +90,7 @@ export default function Builder(){
   };
 
   const toggle=async(x:any)=>{try{await patch(x.id,{isActive:!x.is_active});load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة');}};
-  const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');setRoute(p.items?.[0]?.route||'/customer/restaurants');};
+  const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');const existingRoute=p.items?.[0]?.route||'/customer/restaurants';const known=DESTINATIONS.some(d=>d[2]===existingRoute);setRoute(known?existingRoute:'custom');setCustomRoute(known?'':existingRoute);};
   const saveEdit=async()=>{if(!editing)return;if(!title.trim())return setError('اكتب اسم القسم');try{setBusy(true);await patch(editing.id,{title:title.trim(),subtitle:subtitle.trim(),payload:{layout,items},startsAt:startsAt.trim()||null,expiresAt:expiresAt.trim()||null});setEditing(null);setTitle('');setSubtitle('');setItems([]);setStartsAt('');setExpiresAt('');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل')}finally{setBusy(false)}};
   const move=async(x:any,delta:number)=>{
     const sorted=[...sections].sort((a,b)=>a.sort_order-b.sort_order);
@@ -132,6 +134,7 @@ export default function Builder(){
             <Text style={route===path?s.destinationTextOn:s.destinationText}>{label}</Text>
           </Pressable>)}
         </View>
+        {route==='custom'&&<TextInput value={customRoute} onChangeText={setCustomRoute} placeholder="/customer/..." placeholderTextColor={theme.muted} style={s.input} autoCapitalize="none" textAlign="left"/>}
         <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}. مثال: لو اخترت «قسم الصيدليات» سيفتح العميل قائمة الجهات مفلترة على الصيدليات.</Text>
         <Text style={s.section}>4. عناصر القسم</Text>
         <Text style={s.hint}>يمكنك إضافة أكثر من بطاقة. كل بطاقة لها صورة وزر ووجهة مستقلة.</Text>
