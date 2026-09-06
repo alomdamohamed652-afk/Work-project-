@@ -21,6 +21,7 @@ export default function Locations() {
     try { return (await r.json()).error || 'تعذر تنفيذ العملية'; } catch { return 'تعذر تنفيذ العملية'; }
   };
 
+  const loadAreas=async(id:string)=>{try{const t=await token();const r=await fetch(API+'/api/operations/admin/offices/'+id+'/areas',{headers:{Authorization:'Bearer '+t}});const d=await r.json();setData((x:any)=>({...x,officeAreas:d.areas||[]}))}catch{}};
   const load = async () => {
     try {
       const t = await token();
@@ -119,14 +120,14 @@ export default function Locations() {
         <View style={s.card}>
           <Text style={s.sub}>لو لم تضف أي نطاق فلن يتم رفض العميل بسبب موقعه. بعد إضافة نطاق، يتم التحقق من GPS داخل دائرة الخدمة.</Text>
           <Text style={s.label}>المكتب</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{(data.offices||[]).map((o:any)=><Pressable key={o.id} onPress={()=>setOfficeId(o.id)} style={[s.chip,officeId===o.id&&s.on]}><Text style={officeId===o.id?s.onText:s.chipText}>{o.name}</Text></Pressable>)}</ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{(data.offices||[]).map((o:any)=><Pressable key={o.id} onPress={()=>setOfficeId(o.id);loadAreas(o.id)} style={[s.chip,officeId===o.id&&s.on]}><Text style={officeId===o.id?s.onText:s.chipText}>{o.name}</Text></Pressable>)}</ScrollView>
           {!data.offices?.length&&<Text style={s.warning}>أضف مكتب تشغيل أولًا من إدارة العمليات.</Text>}
           <TextInput value={areaName} onChangeText={setAreaName} placeholder="اسم النطاق: وسط بنها" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
           <TextInput value={areaLat} onChangeText={setAreaLat} placeholder="Latitude مثال: 30.466" keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
           <TextInput value={areaLon} onChangeText={setAreaLon} placeholder="Longitude مثال: 31.184" keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
           <TextInput value={radius} onChangeText={setRadius} placeholder="نصف القطر بالمتر: 5000" keyboardType="numeric" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
           <Pressable onPress={saveArea} style={s.primary}><Text style={s.primaryText}>إضافة نطاق الخدمة</Text></Pressable>
-          {(data.officeAreas||[]).map((a:any)=><View key={a.id} style={s.areaRow}><Text style={s.meta}>{a.name} • {a.radius_meters} متر</Text></View>)}
+          {officeId&&(data.officeAreas||[]).map((a:any)=><View key={a.id} style={s.areaRow}><Text style={s.meta}>{a.name} • {a.radius_meters} متر</Text><Text style={s.meta}>📍 {a.center_latitude}, {a.center_longitude}</Text></View>)}
         </View>
         <Text style={s.section}>التنظيم الإداري</Text>
         {data.governorates.map((g: any) => {
