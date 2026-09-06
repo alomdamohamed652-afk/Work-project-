@@ -4,7 +4,7 @@ import {ActivityIndicator,Animated,PanResponder,Pressable,ScrollView,StyleSheet,
 import {SafeAreaView}from'react-native-safe-area-context';
 import {router,useLocalSearchParams}from'expo-router';
 import {theme}from'@/constants/theme';
-const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\\/$/,'');
+const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 function Swipe({title,onDone}:{title:string;onDone:()=>void}){const x=useRef(new Animated.Value(0)).current,done=useRef(false);const p=useRef(PanResponder.create({onStartShouldSetPanResponder:()=>true,onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>5,onPanResponderMove:(_,g)=>x.setValue(Math.max(0,Math.min(245,g.dx))),onPanResponderRelease:(_,g)=>{if(g.dx>150&&!done.current){done.current=true;Animated.timing(x,{toValue:245,duration:140,useNativeDriver:true}).start(onDone)}else Animated.spring(x,{toValue:0,useNativeDriver:true}).start()}})).current;return <View style={s.swipe} {...p.panHandlers}><Text style={s.swipeText}>{title}</Text><Animated.View style={[s.knob,{transform:[{translateX:x}]}]}><Text style={s.knobText}>›</Text></Animated.View></View>}
 export default function DriverOrder(){
  const {orderId,assigned}=useLocalSearchParams<{orderId:string;assigned?:string}>();const [o,setO]=useState<any>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('');
