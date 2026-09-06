@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import{router,useLocalSearchParams}from'expo-router';
 import{useEffect,useState}from'react';
 import{Image,Pressable,RefreshControl,ScrollView,StyleSheet,Text,TextInput,View}from'react-native';
