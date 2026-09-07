@@ -58,7 +58,7 @@ export default function Operations() {
         <ToggleRow title="البانرات والإعلانات" sub="الرسائل البارزة في الواجهة الرئيسية" value={data.flags.find((x:any)=>x.key==='home_banners')} onToggle={toggle} disabled={busy}/>
         <ToggleRow title="التصنيفات" sub="الأقسام الأساسية التي تظهر للعميل" value={data.flags.find((x:any)=>x.key==='home_categories')} onToggle={toggle} disabled={busy}/>
         <ToggleRow title="الفئات والمستويات" sub="نظام العضوية والتقدم الشهري" value={data.flags.find((x:any)=>x.key==='home_membership')} onToggle={toggle} disabled={busy}/>
-        <ToggleRow title="الأقسام المخصصة" sub="الأقسام التي تنشئها من لوحة التحكم" value={data.flags.find((x:any)=>x.key==='home_custom_sections')} onToggle={toggle} disabled={busy}/>
+        <ToggleRow title="الأقسام المخصصة" sub="الأقسام التي تنشئها من لوحة التحكم" value={data.flags.find((x:any)=>x.key==='home_custom_sections')} onToggle={toggle} disabled={busy}/><ToggleRow title="البحث في الرئيسية" sub="إظهار أو إخفاء شريط البحث للعملاء" value={data.flags.find((x:any)=>x.key==='home_search')} onToggle={toggle} disabled={busy}/><ToggleRow title="أنواع الخدمات" sub="بطاقات المطاعم والصيدليات والسوبر ماركت وغيرها" value={data.flags.find((x:any)=>x.key==='home_service_types')} onToggle={toggle} disabled={busy}/><ToggleRow title="الجهات المميزة" sub="البادجات والعلامات التي تظهر للعملاء" value={data.flags.find((x:any)=>x.key==='home_badges')} onToggle={toggle} disabled={busy}/>
         <ToggleRow title="العروض المنبثقة" sub="رسائل وعروض تظهر عند الحاجة" value={data.flags.find((x:any)=>x.key==='home_popups')} onToggle={toggle} disabled={busy}/>
         <Nav title="تنظيم الصفحة الرئيسية" sub="إضافة قسم، اختيار وجهته، ترتيبه وإظهاره أو إخفاؤه" path="/admin/home-builder"/>
       </Section>
