@@ -25,7 +25,14 @@ jobs:
           else
             echo "No executable unit tests present; skipping."
           fi
-      - run: npx tsc --noEmit --pretty false
+      - name: TypeScript check when configured
+        shell: bash
+        run: |
+          if [ -f tsconfig.json ]; then
+            npx tsc --noEmit --pretty false
+          else
+            echo "No tsconfig.json present; skipping TypeScript check."
+          fi
       - name: Check server JavaScript
         shell: bash
         run: |
