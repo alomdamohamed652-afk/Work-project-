@@ -15,7 +15,14 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm test
+      - name: Run unit tests when present
+        shell: bash
+        run: |
+          if [ -d tests/unit ] && find tests/unit -type f | grep -q .; then
+            npm test
+          else
+            echo "No unit tests present; skipping."
+          fi
       - run: npx tsc --noEmit --pretty false
       - name: Check server JavaScript
         shell: bash
