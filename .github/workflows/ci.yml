@@ -18,10 +18,12 @@ jobs:
       - name: Run unit tests when present
         shell: bash
         run: |
-          if [ -d tests/unit ] && find tests/unit -type f \( -name '*.test.js' -o -name '*.test.cjs' -o -name '*.test.mjs' \) -print -quit | grep -q .; then
-            npm test
+          shopt -s nullglob globstar
+          tests=(tests/unit/**/*.test.js tests/unit/**/*.test.cjs tests/unit/**/*.test.mjs)
+          if [ ${#tests[@]} -gt 0 ]; then
+            node --test "${tests[@]}"
           else
-            echo "No unit tests present; skipping."
+            echo "No executable unit tests present; skipping."
           fi
       - run: npx tsc --noEmit --pretty false
       - name: Check server JavaScript
