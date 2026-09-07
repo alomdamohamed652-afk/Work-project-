@@ -109,10 +109,16 @@ export default function Builder(){
     const i=sorted.findIndex(v=>v.id===x.id),j=i+delta;
     if(j<0||j>=sorted.length)return;
     try{
-      await patch(sorted[i].id,{sortOrder:sorted[j].sort_order});
-      await patch(sorted[j].id,{sortOrder:sorted[i].sort_order});
-      load();
-    }catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الترتيب');}
+      setBusy(true);
+      const t=await token();
+      const ordered=[...layoutItems].sort((a,b)=>a.sort_order-b.sort_order);
+      const a=ordered.findIndex(v=>v.section_id===sorted[i].id),b=ordered.findIndex(v=>v.section_id===sorted[j].id);
+      if(a<0||b<0)throw Error('عنصر القسم غير موجود في ترتيب الصفحة');
+      [ordered[a],ordered[b]]=[ordered[b],ordered[a]];
+      const r=await fetch(API+'/api/operations/admin/home/layout/reorder',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${t}`},body:JSON.stringify({items:ordered.map(v=>v.id)})});
+      const d=await read(r);if(!r.ok)throw Error(d.error||'تعذر تغيير الترتيب');
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الترتيب');}finally{setBusy(false)}
   };
   const remove=(x:any)=>Alert.alert('حذف القسم','سيختفي هذا القسم من الصفحة الرئيسية للعملاء.',[
     {text:'إلغاء',style:'cancel'},
