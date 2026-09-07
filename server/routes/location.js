@@ -8,7 +8,7 @@ function validCoordinate(value, min, max) {
   return Number.isFinite(n) && n >= min && n <= max;
 }
 
-router.post("/me", requireAuth, async (req, res, next) => {
+router.post("/me", requireAuth, requireRole("driver"), async (req, res, next) => {
   try {
     const { latitude, longitude, accuracy, heading, speed } = req.body || {};
     if (!validCoordinate(latitude, -90, 90) || !validCoordinate(longitude, -180, 180)) {
@@ -46,18 +46,22 @@ router.get("/drivers", requireAuth, requireRole("admin", "staff"), async (_req, 
 
 router.get("/my-driver", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
+    const orderId = String(req.query?.orderId || "").trim();
+    const params = [req.user.id];
+    let where = `o.customer_id = $1
+         AND o.driver_id IS NOT NULL
+         AND o.status IN ('assigned','picked_up','on_the_way')`;
+    if (orderId) { params.push(orderId); where += ` AND o.id = $2`; }
     const { rows } = await pool.query(
       `SELECT o.id AS order_id, o.status, u.id AS driver_id, u.full_name, u.phone,
               l.latitude, l.longitude, l.accuracy, l.heading, l.speed, l.updated_at
        FROM orders o
        JOIN users u ON u.id = o.driver_id AND u.role = 'driver'
        LEFT JOIN user_locations l ON l.user_id = u.id
-       WHERE o.customer_id = $1
-         AND o.driver_id IS NOT NULL
-         AND o.status IN ('assigned','picked_up','on_the_way')
+       WHERE ${where}
        ORDER BY o.updated_at DESC
        LIMIT 1`,
-      [req.user.id]
+      params
     );
     res.json({ driver: rows[0] || null });
   } catch (error) { next(error); }
