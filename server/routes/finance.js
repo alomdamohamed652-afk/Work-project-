@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { pool } = require("../db");
-const { requireAuth, requireRole } = require("../auth");
+const { requireAuth, requireRole, requirePermission } = require("../auth");
 
-router.use(requireAuth, requireRole("admin", "staff"));
+router.use(requireAuth, requireRole("admin", "staff"), requirePermission("finance"));
 
 router.get("/summary", async (_req, res, next) => {
   try {

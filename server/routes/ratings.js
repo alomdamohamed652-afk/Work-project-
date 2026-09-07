@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { requireAuth, requireRole } = require('../auth');
+const { requireAuth, requireRole, requirePermission } = require('../auth');
 
 function rating(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -19,7 +19,7 @@ router.get('/restaurant/:restaurantId', requireAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.get('/driver/:driverId', requireAuth, requireRole('admin','staff'), async (req, res, next) => {
+router.get('/driver/:driverId', requireAuth, requireRole('admin','staff'), requirePermission('driver_tracking'), async (req, res, next) => {
   try {
     const { rows } = await pool.query(`SELECT COUNT(*)::int AS count,COALESCE(ROUND(AVG(driver_rating)::numeric,2),0) AS average FROM order_ratings WHERE driver_id=$1 AND driver_rating IS NOT NULL`, [req.params.driverId]);
     res.json({ summary: rows[0] });

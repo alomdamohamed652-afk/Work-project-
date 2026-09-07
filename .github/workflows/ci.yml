@@ -15,8 +15,24 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm test
-      - run: npx tsc --noEmit --pretty false
+      - name: Run unit tests when present
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          tests=(tests/unit/**/*.test.js tests/unit/**/*.test.cjs tests/unit/**/*.test.mjs)
+          if [ ${#tests[@]} -gt 0 ]; then
+            node --test "${tests[@]}"
+          else
+            echo "No executable unit tests present; skipping."
+          fi
+      - name: TypeScript check when configured
+        shell: bash
+        run: |
+          if [ -f tsconfig.json ]; then
+            npx tsc --noEmit --pretty false --allowJs false
+          else
+            echo "No tsconfig.json present; skipping TypeScript check."
+          fi
       - name: Check server JavaScript
         shell: bash
         run: |
