@@ -69,8 +69,9 @@ router.get("/my-driver", requireAuth, requireRole("customer"), async (req, res, 
     if (orderId) { params.push(orderId); where += " AND o.id=$2"; }
     const { rows } = await pool.query(`SELECT o.id AS order_id,o.status,u.id AS driver_id,u.full_name,u.phone,l.latitude,l.longitude,l.accuracy,l.heading,l.speed,l.updated_at
       FROM orders o JOIN users u ON u.id=o.driver_id AND u.role='driver'
-      LEFT JOIN user_locations l ON l.user_id=u.id WHERE ${where} ORDER BY o.updated_at DESC LIMIT 1`, params);
-    res.json({ driver: rows[0] || null });
+      LEFT JOIN user_locations l ON l.user_id=u.id WHERE ${where} ORDER BY o.updated_at DESC`, params);
+    const drivers = rows;
+    res.json({ drivers, driver: orderId ? (drivers[0] || null) : (drivers.length === 1 ? drivers[0] : null) });
   } catch (error) { next(error); }
 });
 
