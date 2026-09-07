@@ -104,23 +104,7 @@ export default function Builder(){
 
   const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');setRoute(p.items?.[0]?.route||'/customer/restaurants');};
   const saveEdit=async()=>{if(!editing)return;if(!title.trim())return setError('اكتب اسم القسم');try{setBusy(true);await patch(editing.id,{title:title.trim(),subtitle:subtitle.trim(),payload:{layout,items},startsAt:startsAt.trim()||null,expiresAt:expiresAt.trim()||null});setEditing(null);setTitle('');setSubtitle('');setItems([]);setStartsAt('');setExpiresAt('');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل')}finally{setBusy(false)}};
-  const move=async(x:any,delta:number)=>{
-    const sorted=[...sections].sort((a,b)=>a.sort_order-b.sort_order);
-    const i=sorted.findIndex(v=>v.id===x.id),j=i+delta;
-    if(j<0||j>=sorted.length)return;
-    try{
-      setBusy(true);
-      const t=await token();
-      const ordered=[...layoutItems].sort((a,b)=>a.sort_order-b.sort_order);
-      const a=ordered.findIndex(v=>v.section_id===sorted[i].id),b=ordered.findIndex(v=>v.section_id===sorted[j].id);
-      if(a<0||b<0)throw Error('عنصر القسم غير موجود في ترتيب الصفحة');
-      [ordered[a],ordered[b]]=[ordered[b],ordered[a]];
-      const r=await fetch(API+'/api/operations/admin/home/layout/reorder',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${t}`},body:JSON.stringify({items:ordered.map(v=>v.id)})});
-      const d=await read(r);if(!r.ok)throw Error(d.error||'تعذر تغيير الترتيب');
-      await load();
-    }catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الترتيب');}finally{setBusy(false)}
-  };
-  const remove=(x:any)=>Alert.alert('حذف القسم','سيختفي هذا القسم من الصفحة الرئيسية للعملاء.',[
+    const remove=(x:any)=>Alert.alert('حذف القسم','سيختفي هذا القسم من الصفحة الرئيسية للعملاء.',[
     {text:'إلغاء',style:'cancel'},
     {text:'حذف',style:'destructive',onPress:async()=>{try{const t=await token();const r=await fetch(API+'/api/operations/admin/home/sections/'+x.id,{method:'DELETE',headers:{Authorization:`Bearer ${t}`}});if(!r.ok)throw Error((await read(r)).error);load()}catch(e){setError(e instanceof Error?e.message:'تعذر الحذف');}}},
   ]);
