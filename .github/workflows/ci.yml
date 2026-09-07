@@ -18,7 +18,7 @@ jobs:
       - name: Run unit tests when present
         shell: bash
         run: |
-          if [ -d tests/unit ] && find tests/unit -type f | grep -q .; then
+          if find tests/unit -type f 2>/dev/null | grep -q .; then
             npm test
           else
             echo "No unit tests present; skipping."
