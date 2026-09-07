@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
-const TYPES=[['custom','قسم بطاقات','عدة عناصر قابلة للضغط'],['banner','بانر','رسالة أو عرض بارز'],['popup','نافذة','رسالة تظهر للمستخدم']] as const;
+const TYPES=[['banner','🖼️ بانر','عرض أو رسالة بارزة'],['custom','🧩 قسم مخصص','بطاقات وروابط داخل الصفحة'],['popup','📢 نافذة','عرض يظهر للعميل عند فتح التطبيق']] as const;
 const LAYOUTS=[['horizontal','بطاقات أفقية'],['grid','شبكة'],['single','عنصر واحد']] as const;
 const DESTINATIONS=[
   ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
@@ -108,17 +108,17 @@ export default function Builder(){
   return <SafeAreaView style={s.safe}>
     <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Pressable onPress={()=>router.replace('/admin')} style={s.back}><Text style={s.backText}>←</Text></Pressable>
-      <Text style={s.title}>تنظيم الواجهة الرئيسية</Text>
-      <Text style={s.sub}>هنا أنت تتحكم في ما يظهر للعميل: اسم القسم، صورته، نوعه، ترتيبه والوجهة التي يفتحها. لا تحتاج لكتابة مسارات تقنية؛ اختر مثلًا «قسم الصيدليات» وسيتم الفلترة تلقائيًا.</Text>
+      <Text style={s.title}>منشئ الصفحة الرئيسية</Text>
+      <Text style={s.sub}>اختر نوع المحتوى، ثم أضف فقط البيانات التي يحتاجها. ترتيب الأقسام هنا هو نفس ترتيب ظهورها للعميل.</Text>
 
       <View style={s.card}>
-        <Text style={s.section}>1. اختر شكل القسم</Text>
+        <Text style={s.section}>أولًا: ماذا تريد إضافته؟</Text>
         {TYPES.map(([value,label,desc])=><Pressable key={value} onPress={()=>setType(value)} style={[s.choice,type===value&&s.choiceOn]}>
           <View style={{flex:1}}><Text style={[s.choiceTitle,type===value&&s.choiceTitleOn]}>{label}</Text><Text style={[s.choiceDesc,type===value&&s.choiceDescOn]}>{desc}</Text></View>
           <Text style={[s.check,type===value&&s.checkOn]}>{type===value?'✓':'○'}</Text>
         </Pressable>)}
 
-        <Text style={s.section}>2. محتوى القسم</Text>
+        <Text style={s.section}>ثانيًا: بيانات القسم</Text>
         <TextInput value={title} onChangeText={setTitle} placeholder="مثال: عروض اليوم" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={subtitle} onChangeText={setSubtitle} placeholder="وصف مختصر اختياري" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={itemTitle} onChangeText={setItemTitle} placeholder="اسم العنصر — مثال: صيدليات قريبة" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
@@ -126,20 +126,20 @@ export default function Builder(){
         <TextInput value={itemImage} onChangeText={setItemImage} placeholder="رابط صورة للعنصر (اختياري)" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <Text style={s.hint}>العناصر داخل القسم يمكن أن يكون لكل واحد منها صورة مستقلة.</Text>
 
-        <Text style={s.section}>3. عند الضغط يفتح</Text>
+        <Text style={s.section}>ثالثًا: وجهة الضغط</Text>
         <View style={s.destinations}>
           {DESTINATIONS.map(([key,label,path])=><Pressable key={key} onPress={()=>setRoute(path)} style={[s.destination,route===path&&s.destinationOn]}>
             <Text style={route===path?s.destinationTextOn:s.destinationText}>{label}</Text>
           </Pressable>)}
         </View>
         <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}. مثال: لو اخترت «قسم الصيدليات» سيفتح العميل قائمة الجهات مفلترة على الصيدليات.</Text>
-        <Text style={s.section}>4. عناصر القسم</Text>
+        <Text style={s.section}>رابعًا: عناصر القسم</Text>
         <Text style={s.hint}>يمكنك إضافة أكثر من بطاقة. كل بطاقة لها صورة وزر ووجهة مستقلة.</Text>
         <Pressable onPress={addItem} style={s.secondary}><Text style={s.secondaryText}>+ إضافة العنصر الحالي للقسم</Text></Pressable>
         {items.map((it,i)=><View key={i} style={s.preview}><View style={{flex:1}}><Text style={s.previewTitle}>{i+1}. {it.title}</Text><Text style={s.meta}>الزر: {it.button} • {DESTINATIONS.find(d=>d[2]===it.route)?.[1]||'وجهة مخصصة'} • {it.image?'بصورة':'بدون صورة'}</Text></View><Pressable onPress={()=>removeItem(i)}><Text style={s.deleteText}>حذف</Text></Pressable></View>)}
-        <Text style={s.section}>5. شكل العرض</Text>
+        <Text style={s.section}>خامسًا: شكل العرض</Text>
         <View style={s.destinations}>{LAYOUTS.map(([value,label])=><Pressable key={value} onPress={()=>setLayout(value)} style={[s.destination,layout===value&&s.destinationOn]}><Text style={layout===value?s.destinationTextOn:s.destinationText}>{label}</Text></Pressable>)}</View>
-        <Text style={s.section}>6. وقت النشر (اختياري)</Text>
+        <Text style={s.section}>النشر المجدول (اختياري)</Text>
         <TextInput value={startsAt} onChangeText={setStartsAt} placeholder="بداية العرض: YYYY-MM-DDTHH:MM" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={expiresAt} onChangeText={setExpiresAt} placeholder="نهاية العرض: YYYY-MM-DDTHH:MM" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <Pressable disabled={busy} onPress={add} style={[s.primary,busy&&{opacity:.6}]}><Text style={s.primaryText}>{busy?'جاري الحفظ...':items.length?'حفظ القسم وعناصره':'إضافة القسم إلى الرئيسية'}</Text></Pressable>
