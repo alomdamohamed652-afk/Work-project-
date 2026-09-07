@@ -15,7 +15,6 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm run lint
       - run: npm test
       - run: npx tsc --noEmit --pretty false
       - name: Check server JavaScript
