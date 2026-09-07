@@ -13,7 +13,7 @@ router.get("/attention", async (_req,res,next)=>{try{
   pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE status IN ('preparing','ready') AND estimated_ready_at IS NOT NULL AND estimated_ready_at<now()"),
   pool.query("SELECT COUNT(DISTINCT o.id)::int AS count FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status NOT IN ('delivered','cancelled','restaurant_rejected','admin_rejected') AND oi.availability_status IN ('unavailable','replacement_pending')"),
   pool.query("SELECT COUNT(*)::int AS count FROM payment_adjustments WHERE status='pending'"),
-  pool.query("SELECT COUNT(*)::int AS count FROM checkout_sessions WHERE payment_status IN ('pending_verification','payment_pending')")
+  pool.query("SELECT COUNT(*)::int AS count FROM checkout_sessions WHERE payment_status='pending'")
  ]);
  const items=[
   {key:'orders',title:'طلبات تحتاج مراجعة',count:review[0].count,path:'/admin/orders',description:'طلبات جديدة أو تنتظر قرارًا'},
