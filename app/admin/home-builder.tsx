@@ -168,8 +168,6 @@ export default function Builder(){
           </View>
           <Text style={s.meta}>الزر: {x.payload?.items?.[0]?.button||'فتح القسم'} • الوجهة: {DESTINATIONS.find(d=>d[2]===x.payload?.items?.[0]?.route)?.[1]||'وجهة مخصصة'} • {x.payload?.items?.[0]?.image?'به صورة':'بدون صورة'}</Text>
           <View style={s.actions}>
-            <Pressable onPress={()=>move(x,-1)} style={s.actionBtn}><Text style={s.actionText}>رفع ↑</Text></Pressable>
-            <Pressable onPress={()=>move(x,1)} style={s.actionBtn}><Text style={s.actionText}>خفض ↓</Text></Pressable>
             <Pressable onPress={()=>toggle(x)} style={s.actionBtn}><Text style={x.is_active?s.stopText:s.enableText}>{x.is_active?'إخفاء':'إظهار'}</Text></Pressable>
             <Pressable onPress={()=>openEdit(x)} style={s.actionBtn}><Text style={s.actionText}>تعديل</Text></Pressable>
             <Pressable onPress={()=>remove(x)} style={s.actionBtn}><Text style={s.deleteText}>حذف</Text></Pressable>
