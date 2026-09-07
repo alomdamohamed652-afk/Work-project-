@@ -8,7 +8,7 @@ router.use(requireAuth, requireRole("admin", "staff"));
 router.get("/summary", async (_req, res, next) => {
   try {
     const [orders, drivers] = await Promise.all([
-      pool.query(`SELECT COUNT(*)::int AS orders, COALESCE(SUM(total_amount),0)::numeric AS gross, COALESCE(SUM(delivery_fee),0)::numeric AS delivery_fees FROM orders WHERE status='delivered'`),
+      pool.query(`SELECT COUNT(*)::int AS orders, COALESCE(SUM(total_amount),0)::numeric AS gross, COALESCE(SUM(paid_amount),0)::numeric AS net_paid, COALESCE(SUM(cash_due),0)::numeric AS cash_due, COALESCE(SUM(delivery_fee),0)::numeric AS delivery_fees FROM orders WHERE status='delivered'`),
       pool.query(`SELECT COALESCE(SUM(CASE WHEN role='driver' AND status='active' THEN 1 ELSE 0 END),0)::int AS active FROM users`)
     ]);
     res.json({ summary: { ...orders.rows[0], activeDrivers: drivers.rows[0].active } });
@@ -20,8 +20,10 @@ router.get("/drivers", async (_req, res, next) => {
     const { rows } = await pool.query(`
       SELECT u.id,u.full_name,u.phone,u.status,
         COUNT(o.id)::int AS delivered_orders,
-        COALESCE(SUM(o.delivery_fee),0)::numeric AS delivery_earnings,
-        COALESCE(SUM(o.total_amount),0)::numeric AS handled_value
+        COALESCE(SUM(o.delivery_fee),0)::numeric AS delivery_fees,
+        COALESCE(SUM(o.total_amount),0)::numeric AS handled_value,
+        COALESCE(SUM(o.paid_amount),0)::numeric AS net_paid,
+        COALESCE(SUM(o.cash_due),0)::numeric AS cash_due
       FROM users u
       LEFT JOIN orders o ON o.driver_id=u.id AND o.status='delivered'
       WHERE u.role='driver'
@@ -35,7 +37,7 @@ router.get("/drivers", async (_req, res, next) => {
 router.get("/transactions", async (_req, res, next) => {
   try {
     const { rows } = await pool.query(`
-      SELECT o.id,o.created_at,o.updated_at,o.status,o.total_amount,o.subtotal,o.delivery_fee,
+      SELECT o.id,o.created_at,o.updated_at,o.status,o.total_amount,o.paid_amount,o.cash_due,o.payment_status,o.subtotal,o.delivery_fee,
              c.full_name AS customer_name,rp.display_name AS restaurant_name,d.full_name AS driver_name
       FROM orders o
       JOIN users c ON c.id=o.customer_id
