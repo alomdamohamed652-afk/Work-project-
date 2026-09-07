@@ -8,6 +8,14 @@ import { theme } from '@/constants/theme';
 const API=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 const TYPES=[['banner','🖼️ بانر','عرض أو رسالة بارزة'],['custom','🧩 قسم مخصص','بطاقات وروابط داخل الصفحة'],['popup','📢 نافذة','عرض يظهر للعميل عند فتح التطبيق']] as const;
 const LAYOUTS=[['horizontal','بطاقات أفقية'],['grid','شبكة'],['single','عنصر واحد']] as const;
+const CORE_SECTIONS=[
+  ['home_search','🔎 البحث','شريط البحث في أعلى الرئيسية'],
+  ['home_service_types','🏪 أنواع الخدمات','بطاقات المطاعم والصيدليات والسوبر ماركت'],
+  ['home_banners','🖼️ البانرات','العروض والبنرات المضافة من الإدارة'],
+  ['home_categories','🏷️ التصنيفات','تصنيفات الخدمات والمنتجات'],
+  ['home_membership','🏆 العضوية','تقدم العميل وفئته الحالية'],
+  ['home_badges','⭐ الجهات المميزة','العلامات والجهات المميزة'],
+] as const;
 const DESTINATIONS=[
   ['restaurants','كل المطاعم والجهات','/customer/restaurants'],
   ['pharmacies','قسم الصيدليات','/customer/restaurants?merchantType=pharmacy'],
@@ -22,6 +30,7 @@ const DESTINATIONS=[
 
 export default function Builder(){
   const [sections,setSections]=useState<any[]>([]);
+  const [flags,setFlags]=useState<any[]>([]);
   const [title,setTitle]=useState('');
   const [subtitle,setSubtitle]=useState('');
   const [button,setButton]=useState('');
@@ -46,7 +55,7 @@ export default function Builder(){
       const r=await fetch(API+'/api/operations/admin/home',{headers:{Authorization:`Bearer ${t}`}});
       const d=await read(r);
       if(!r.ok)throw Error(d.error||'تعذر تحميل الإعدادات');
-      setSections(d.sections||[]);
+      setSections(d.sections||[]);setFlags(d.flags||[]);
     }catch(e){setError(e instanceof Error?e.message:'تعذر تحميل إعدادات الشاشة');}
   };
   useEffect(()=>{load()},[]);
@@ -88,6 +97,8 @@ export default function Builder(){
   };
 
   const toggle=async(x:any)=>{try{await patch(x.id,{isActive:!x.is_active});load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة');}};
+  const toggleFlag=async(key:string,enabled:boolean)=>{try{setBusy(true);const t=await token();const r=await fetch(API+'/api/operations/admin/home/flags/'+key,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${t}`},body:JSON.stringify({enabled})});const d=await read(r);if(!r.ok)throw Error(d.error||'تعذر تغيير الحالة');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة')}finally{setBusy(false)}};
+
   const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');setRoute(p.items?.[0]?.route||'/customer/restaurants');};
   const saveEdit=async()=>{if(!editing)return;if(!title.trim())return setError('اكتب اسم القسم');try{setBusy(true);await patch(editing.id,{title:title.trim(),subtitle:subtitle.trim(),payload:{layout,items},startsAt:startsAt.trim()||null,expiresAt:expiresAt.trim()||null});setEditing(null);setTitle('');setSubtitle('');setItems([]);setStartsAt('');setExpiresAt('');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل')}finally{setBusy(false)}};
   const move=async(x:any,delta:number)=>{
@@ -112,6 +123,11 @@ export default function Builder(){
       <Text style={s.sub}>اختر نوع المحتوى، ثم أضف فقط البيانات التي يحتاجها. ترتيب الأقسام هنا هو نفس ترتيب ظهورها للعميل.</Text>
 
       <View style={s.card}>
+        <Text style={s.section}>الأقسام الأساسية</Text>
+        <Text style={s.hint}>هذه عناصر النظام الأساسية. يمكنك إظهارها أو إخفاءها من نفس المكان، أما ترتيبها الكامل فسيكون الخطوة التالية.</Text>
+        {CORE_SECTIONS.map(([key,label,desc])=>{const f=flags.find((x:any)=>x.key===key);const enabled=f?.is_enabled!==false;return <View key={key} style={s.core}><View style={{flex:1}}><Text style={s.choiceTitle}>{label}</Text><Text style={s.choiceDesc}>{desc}</Text></View><Pressable disabled={busy} onPress={()=>toggleFlag(key,enabled)} style={[s.coreToggle,enabled&&s.coreToggleOn]}><Text style={enabled?s.coreToggleTextOn:s.coreToggleText}>{enabled?'ظاهر':'مخفي'}</Text></Pressable></View>})}
+        <Text style={s.section}>إضافة محتوى جديد</Text>
+        <Text style={s.hint}>الأقسام المضافة هنا تظهر مع محتوى الصفحة الرئيسية حسب ترتيبها.</Text>
         <Text style={s.section}>أولًا: ماذا تريد إضافته؟</Text>
         {TYPES.map(([value,label,desc])=><Pressable key={value} onPress={()=>setType(value)} style={[s.choice,type===value&&s.choiceOn]}>
           <View style={{flex:1}}><Text style={[s.choiceTitle,type===value&&s.choiceTitleOn]}>{label}</Text><Text style={[s.choiceDesc,type===value&&s.choiceDescOn]}>{desc}</Text></View>
@@ -178,7 +194,7 @@ const s=StyleSheet.create({
   choiceTitle:{color:theme.text,fontWeight:'900',textAlign:'right'},choiceTitleOn:{color:theme.primary},choiceDesc:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:3},choiceDescOn:{color:theme.text},
   check:{color:theme.muted,fontSize:18},checkOn:{color:theme.primary},input:{height:47,borderWidth:1,borderColor:theme.border,borderRadius:12,backgroundColor:theme.background,color:theme.text,paddingHorizontal:12,marginBottom:7},
   destinations:{flexDirection:'row-reverse',flexWrap:'wrap',gap:7},destination:{paddingHorizontal:11,paddingVertical:9,borderRadius:11,borderWidth:1,borderColor:theme.border},destinationOn:{backgroundColor:theme.primary,borderColor:theme.primary},
-  destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},
+  destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},core:{flexDirection:'row-reverse',alignItems:'center',gap:10,borderWidth:1,borderColor:theme.border,borderRadius:13,padding:11,marginBottom:7},coreToggle:{minWidth:58,paddingVertical:8,paddingHorizontal:10,borderRadius:10,borderWidth:1,borderColor:theme.border,alignItems:'center'},coreToggleOn:{backgroundColor:theme.primary,borderColor:theme.primary},coreToggleText:{color:theme.muted,fontSize:10,fontWeight:'900'},coreToggleTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},
   primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},secondary:{height:43,borderRadius:12,borderWidth:1,borderColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:8},secondaryText:{color:theme.primary,fontWeight:'900',fontSize:11},preview:{flexDirection:'row-reverse',alignItems:'center',gap:8,borderRadius:11,backgroundColor:theme.background,padding:10,marginTop:6},previewTitle:{color:theme.text,fontSize:11,fontWeight:'900',textAlign:'right'},
   error:{color:theme.danger,fontSize:11,textAlign:'right',marginTop:9},currentTitle:{color:theme.text,fontSize:17,fontWeight:'900',textAlign:'right',marginTop:20,marginBottom:9},
   item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginBottom:8},itemOff:{opacity:.6},itemTop:{flexDirection:'row-reverse',alignItems:'center',gap:9},
