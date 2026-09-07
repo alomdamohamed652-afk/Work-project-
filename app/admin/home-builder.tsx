@@ -31,6 +31,7 @@ const DESTINATIONS=[
 export default function Builder(){
   const [sections,setSections]=useState<any[]>([]);
   const [flags,setFlags]=useState<any[]>([]);
+  const [layoutItems,setLayoutItems]=useState<any[]>([]);
   const [title,setTitle]=useState('');
   const [subtitle,setSubtitle]=useState('');
   const [button,setButton]=useState('');
@@ -56,6 +57,7 @@ export default function Builder(){
       const d=await read(r);
       if(!r.ok)throw Error(d.error||'تعذر تحميل الإعدادات');
       setSections(d.sections||[]);setFlags(d.flags||[]);
+      const lr=await fetch(API+'/api/operations/admin/home/layout',{headers:{Authorization:`Bearer ${t}`}});const ld=await read(lr);if(!lr.ok)throw Error(ld.error||'تعذر تحميل ترتيب الصفحة');setLayoutItems(ld.items||[]);
     }catch(e){setError(e instanceof Error?e.message:'تعذر تحميل إعدادات الشاشة');}
   };
   useEffect(()=>{load()},[]);
@@ -97,6 +99,7 @@ export default function Builder(){
   };
 
   const toggle=async(x:any)=>{try{await patch(x.id,{isActive:!x.is_active});load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة');}};
+  const reorderLayout=async(id:string,delta:number)=>{const sorted=[...layoutItems].sort((a,b)=>a.sort_order-b.sort_order);const i=sorted.findIndex(x=>x.id===id),j=i+delta;if(i<0||j<0||j>=sorted.length)return;try{setBusy(true);const next=[...sorted];[next[i],next[j]]=[next[j],next[i]];const t=await token();const r=await fetch(API+'/api/operations/admin/home/layout/reorder',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${t}`},body:JSON.stringify({items:next.map(x=>x.id)})});const d=await read(r);if(!r.ok)throw Error(d.error||'تعذر حفظ الترتيب');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الترتيب')}finally{setBusy(false)}};
   const toggleFlag=async(key:string,enabled:boolean)=>{try{setBusy(true);const t=await token();const r=await fetch(API+'/api/operations/admin/home/flags/'+key,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${t}`},body:JSON.stringify({enabled})});const d=await read(r);if(!r.ok)throw Error(d.error||'تعذر تغيير الحالة');await load()}catch(e){setError(e instanceof Error?e.message:'تعذر تغيير الحالة')}finally{setBusy(false)}};
 
   const openEdit=(x:any)=>{const p=x.payload||{};setEditing(x);setTitle(x.title||'');setSubtitle(x.subtitle||'');setType(x.section_type||'custom');setItems(p.items||[]);setLayout(p.layout||'horizontal');setStartsAt(x.starts_at?String(x.starts_at).slice(0,16):'');setExpiresAt(x.expires_at?String(x.expires_at).slice(0,16):'');setItemTitle('');setButton('');setItemImage('');setRoute(p.items?.[0]?.route||'/customer/restaurants');};
@@ -123,6 +126,9 @@ export default function Builder(){
       <Text style={s.sub}>اختر نوع المحتوى، ثم أضف فقط البيانات التي يحتاجها. ترتيب الأقسام هنا هو نفس ترتيب ظهورها للعميل.</Text>
 
       <View style={s.card}>
+        <Text style={s.section}>ترتيب الصفحة الرئيسية</Text>
+        <Text style={s.hint}>هذا هو ترتيب ظهور العناصر عند العميل. استخدم رفع وخفض لتغيير مكان أي عنصر.</Text>
+        {[...layoutItems].sort((a,b)=>a.sort_order-b.sort_order).map((x,i)=>{const core=CORE_SECTIONS.find(v=>v[0]===x.item_key);const label=core?core[1]:x.title||x.section_type==='banner'?'🖼️ '+(x.title||'بانر'):x.section_type==='popup'?'📢 '+(x.title||'نافذة'):'🧩 '+(x.title||'قسم مخصص');return <View key={x.id} style={s.layoutRow}><View style={s.order}><Text style={s.orderText}>{i+1}</Text></View><View style={{flex:1}}><Text style={s.choiceTitle}>{label}</Text><Text style={s.choiceDesc}>{x.is_active?'ظاهر للعميل':'مخفي'}</Text></View><Pressable disabled={busy||i===0} onPress={()=>reorderLayout(x.id,-1)} style={s.smallBtn}><Text style={s.actionText}>↑</Text></Pressable><Pressable disabled={busy||i===layoutItems.length-1} onPress={()=>reorderLayout(x.id,1)} style={s.smallBtn}><Text style={s.actionText}>↓</Text></Pressable></View>})}
         <Text style={s.section}>الأقسام الأساسية</Text>
         <Text style={s.hint}>هذه عناصر النظام الأساسية. يمكنك إظهارها أو إخفاءها من نفس المكان، أما ترتيبها الكامل فسيكون الخطوة التالية.</Text>
         {CORE_SECTIONS.map(([key,label,desc])=>{const f=flags.find((x:any)=>x.key===key);const enabled=f?.is_enabled!==false;return <View key={key} style={s.core}><View style={{flex:1}}><Text style={s.choiceTitle}>{label}</Text><Text style={s.choiceDesc}>{desc}</Text></View><Pressable disabled={busy} onPress={()=>toggleFlag(key,enabled)} style={[s.coreToggle,enabled&&s.coreToggleOn]}><Text style={enabled?s.coreToggleTextOn:s.coreToggleText}>{enabled?'ظاهر':'مخفي'}</Text></Pressable></View>})}
@@ -194,7 +200,7 @@ const s=StyleSheet.create({
   choiceTitle:{color:theme.text,fontWeight:'900',textAlign:'right'},choiceTitleOn:{color:theme.primary},choiceDesc:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:3},choiceDescOn:{color:theme.text},
   check:{color:theme.muted,fontSize:18},checkOn:{color:theme.primary},input:{height:47,borderWidth:1,borderColor:theme.border,borderRadius:12,backgroundColor:theme.background,color:theme.text,paddingHorizontal:12,marginBottom:7},
   destinations:{flexDirection:'row-reverse',flexWrap:'wrap',gap:7},destination:{paddingHorizontal:11,paddingVertical:9,borderRadius:11,borderWidth:1,borderColor:theme.border},destinationOn:{backgroundColor:theme.primary,borderColor:theme.primary},
-  destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},core:{flexDirection:'row-reverse',alignItems:'center',gap:10,borderWidth:1,borderColor:theme.border,borderRadius:13,padding:11,marginBottom:7},coreToggle:{minWidth:58,paddingVertical:8,paddingHorizontal:10,borderRadius:10,borderWidth:1,borderColor:theme.border,alignItems:'center'},coreToggleOn:{backgroundColor:theme.primary,borderColor:theme.primary},coreToggleText:{color:theme.muted,fontSize:10,fontWeight:'900'},coreToggleTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},
+  destinationText:{color:theme.text,fontSize:10,fontWeight:'800'},destinationTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},hint:{color:theme.muted,fontSize:9,textAlign:'right',marginTop:9},core:{flexDirection:'row-reverse',alignItems:'center',gap:10,borderWidth:1,borderColor:theme.border,borderRadius:13,padding:11,marginBottom:7},coreToggle:{minWidth:58,paddingVertical:8,paddingHorizontal:10,borderRadius:10,borderWidth:1,borderColor:theme.border,alignItems:'center'},coreToggleOn:{backgroundColor:theme.primary,borderColor:theme.primary},coreToggleText:{color:theme.muted,fontSize:10,fontWeight:'900'},coreToggleTextOn:{color:'#fff',fontSize:10,fontWeight:'900'},layoutRow:{flexDirection:'row-reverse',alignItems:'center',gap:7,borderWidth:1,borderColor:theme.border,borderRadius:13,padding:9,marginBottom:7},smallBtn:{width:34,height:34,borderRadius:10,backgroundColor:theme.background,alignItems:'center',justifyContent:'center'},
   primary:{height:48,borderRadius:13,backgroundColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:13},primaryText:{color:'#fff',fontWeight:'900'},secondary:{height:43,borderRadius:12,borderWidth:1,borderColor:theme.primary,alignItems:'center',justifyContent:'center',marginTop:8},secondaryText:{color:theme.primary,fontWeight:'900',fontSize:11},preview:{flexDirection:'row-reverse',alignItems:'center',gap:8,borderRadius:11,backgroundColor:theme.background,padding:10,marginTop:6},previewTitle:{color:theme.text,fontSize:11,fontWeight:'900',textAlign:'right'},
   error:{color:theme.danger,fontSize:11,textAlign:'right',marginTop:9},currentTitle:{color:theme.text,fontSize:17,fontWeight:'900',textAlign:'right',marginTop:20,marginBottom:9},
   item:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:16,padding:12,marginBottom:8},itemOff:{opacity:.6},itemTop:{flexDirection:'row-reverse',alignItems:'center',gap:9},
