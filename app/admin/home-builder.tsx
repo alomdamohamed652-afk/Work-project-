@@ -51,7 +51,7 @@ export default function Builder(){
   };
   useEffect(()=>{load()},[]);
 
-  const addItem=()=>{if(!itemTitle.trim())return setError('اكتب اسم العنصر');setItems(x=>[...x,{title:itemTitle.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]);setItemTitle('');setButton('');setItemImage('');};
+  const addItem=()=>{if(type==='popup')return setError('النافذة تستخدم المحتوى الرئيسي ولا تحتاج عناصر متعددة');if(!itemTitle.trim())return setError('اكتب اسم العنصر');setItems(x=>[...x,{title:itemTitle.trim(),button:button.trim()||'فتح القسم',route,image:itemImage.trim()||null}]);setItemTitle('');setButton('');setItemImage('');};
   const removeItem=(i:number)=>setItems(x=>x.filter((_,index)=>index!==i));
 
   const add=async()=>{
@@ -119,12 +119,13 @@ export default function Builder(){
         </Pressable>)}
 
         <Text style={s.section}>ثانيًا: بيانات القسم</Text>
-        <TextInput value={title} onChangeText={setTitle} placeholder="مثال: عروض اليوم" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <TextInput value={subtitle} onChangeText={setSubtitle} placeholder="وصف مختصر اختياري" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <TextInput value={itemTitle} onChangeText={setItemTitle} placeholder="اسم العنصر — مثال: صيدليات قريبة" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <TextInput value={button} onChangeText={setButton} placeholder="اسم الزر — مثال: عرض الصيدليات" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <TextInput value={itemImage} onChangeText={setItemImage} placeholder="رابط صورة للعنصر (اختياري)" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
-        <Text style={s.hint}>العناصر داخل القسم يمكن أن يكون لكل واحد منها صورة مستقلة.</Text>
+        <TextInput value={title} onChangeText={setTitle} placeholder={type==='banner'?'عنوان العرض':'مثال: عروض اليوم'} placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={subtitle} onChangeText={setSubtitle} placeholder={type==='popup'?'رسالة النافذة':'وصف مختصر اختياري'} placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        {type!=='popup'&&<><TextInput value={itemTitle} onChangeText={setItemTitle} placeholder={type==='banner'?'نص مختصر للبانر':'اسم العنصر — مثال: صيدليات قريبة'} placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={button} onChangeText={setButton} placeholder={type==='banner'?'نص الزر — مثال: شاهد العرض':'اسم الزر — مثال: عرض الصيدليات'} placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
+        <TextInput value={itemImage} onChangeText={setItemImage} placeholder={type==='banner'?'رابط صورة البانر (اختياري)':'رابط صورة للعنصر (اختياري)'} placeholderTextColor={theme.muted} style={s.input} textAlign="right"/></>}
+        {type==='popup'&&<TextInput value={itemImage} onChangeText={setItemImage} placeholder="رابط صورة النافذة (اختياري)" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>}
+        <Text style={s.hint}>{type==='popup'?'اكتب عنوانًا ورسالة للنافذة، ثم اختر وجهة الزر إن احتجت.':type==='banner'?'البانر يحتاج عنوانًا وصورة اختيارية وزرًا واحدًا.':'يمكنك إضافة أكثر من بطاقة، ولكل بطاقة صورة ووجهة.'}</Text>
 
         <Text style={s.section}>ثالثًا: وجهة الضغط</Text>
         <View style={s.destinations}>
