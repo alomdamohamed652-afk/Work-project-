@@ -134,12 +134,12 @@ export default function Builder(){
           </Pressable>)}
         </View>
         <Text style={s.hint}>الوجهة الحالية: {DESTINATIONS.find(x=>x[2]===route)?.[1]||'مخصصة'}. مثال: لو اخترت «قسم الصيدليات» سيفتح العميل قائمة الجهات مفلترة على الصيدليات.</Text>
-        <Text style={s.section}>رابعًا: عناصر القسم</Text>
+        {type==='custom'&&<><Text style={s.section}>رابعًا: عناصر القسم</Text>
         <Text style={s.hint}>يمكنك إضافة أكثر من بطاقة. كل بطاقة لها صورة وزر ووجهة مستقلة.</Text>
-        <Pressable onPress={addItem} style={s.secondary}><Text style={s.secondaryText}>+ إضافة العنصر الحالي للقسم</Text></Pressable>
+        <Pressable onPress={addItem} style={s.secondary}><Text style={s.secondaryText}>+ إضافة العنصر الحالي للقسم</Text></Pressable></>}
         {items.map((it,i)=><View key={i} style={s.preview}><View style={{flex:1}}><Text style={s.previewTitle}>{i+1}. {it.title}</Text><Text style={s.meta}>الزر: {it.button} • {DESTINATIONS.find(d=>d[2]===it.route)?.[1]||'وجهة مخصصة'} • {it.image?'بصورة':'بدون صورة'}</Text></View><Pressable onPress={()=>removeItem(i)}><Text style={s.deleteText}>حذف</Text></Pressable></View>)}
-        <Text style={s.section}>خامسًا: شكل العرض</Text>
-        <View style={s.destinations}>{LAYOUTS.map(([value,label])=><Pressable key={value} onPress={()=>setLayout(value)} style={[s.destination,layout===value&&s.destinationOn]}><Text style={layout===value?s.destinationTextOn:s.destinationText}>{label}</Text></Pressable>)}</View>
+        {type!=='popup'&&<><Text style={s.section}>خامسًا: شكل العرض</Text>
+        <View style={s.destinations}>{LAYOUTS.map(([value,label])=><Pressable key={value} onPress={()=>setLayout(value)} style={[s.destination,layout===value&&s.destinationOn]}><Text style={layout===value?s.destinationTextOn:s.destinationText}>{label}</Text></Pressable>)}</View></>}
         <Text style={s.section}>النشر المجدول (اختياري)</Text>
         <TextInput value={startsAt} onChangeText={setStartsAt} placeholder="بداية العرض: YYYY-MM-DDTHH:MM" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
         <TextInput value={expiresAt} onChangeText={setExpiresAt} placeholder="نهاية العرض: YYYY-MM-DDTHH:MM" placeholderTextColor={theme.muted} style={s.input} textAlign="right"/>
